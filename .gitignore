@@ -1,0 +1,21 @@
+# 依赖
+node_modules/
+
+# 构建
+dist/
+dist-ssr/
+
+# 环境
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# 日志与系统
+*.log
+.DS_Store

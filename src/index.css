@@ -1,0 +1,51 @@
+:root {
+  --bg-page: #f5f0e8;
+  --accent: #a7c7c9;
+  --user-bubble: #e3f2e8;
+  --radius: 14px;
+  --shadow-soft: 0 1px 8px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  background: var(--bg-page);
+  color: #333;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+/* Ant Design 覆盖：柔和风格 */
+.ant-btn-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.ant-btn-primary:hover {
+  background: #8fb5b7 !important;
+  border-color: #8fb5b7 !important;
+}
+.ant-input:focus, .ant-input-focused {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px rgba(167, 199, 201, 0.2) !important;
+}
+.ant-tabs-ink-bar {
+  background: var(--accent) !important;
+}
+.ant-tabs-tab-btn:focus-visible {
+  color: var(--accent) !important;
+}
+.ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--accent) !important;
+}
+
+@keyframes blink {
+  50% { opacity: 0; }
+}
