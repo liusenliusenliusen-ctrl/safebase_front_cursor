@@ -1,5 +1,6 @@
 import type { Message } from "@/types";
 import dayjs from "dayjs";
+import { MarkdownText } from "./MarkdownText";
 
 interface MessageBubbleProps {
   message: Message;
@@ -36,11 +37,11 @@ export function MessageBubble({ message, showDate }: MessageBubbleProps) {
           borderRadius: 16,
           background: isUser ? "var(--user-bubble)" : "#fff",
           boxShadow: isUser ? "none" : "var(--shadow-soft)",
-          whiteSpace: "pre-wrap",
+          whiteSpace: isUser ? "pre-wrap" : "normal",
           wordBreak: "break-word",
         }}
       >
-        {message.content}
+        {isUser ? message.content : <MarkdownText content={message.content} />}
       </div>
     </div>
   );

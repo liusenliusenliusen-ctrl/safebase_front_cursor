@@ -1,0 +1,11 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../safebase_backend_cursor"
+		}
+	],
+	"settings": {}
+}

@@ -27,3 +27,11 @@ export async function getMe(): Promise<User> {
   const { data } = await apiClient.get<User>("/api/auth/me");
   return data;
 }
+
+/** 永久注销当前账号（需密码确认）；成功后后端删除用户及关联数据。 */
+export async function deleteAccount(password: string): Promise<{ ok: boolean }> {
+  const { data } = await apiClient.post<{ ok: boolean }>("/api/auth/delete-account", {
+    password,
+  });
+  return data;
+}

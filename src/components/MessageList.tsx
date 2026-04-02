@@ -3,6 +3,7 @@ import type { Message } from "@/types";
 import dayjs from "dayjs";
 import { MessageBubble } from "./MessageBubble";
 import { Spin } from "antd";
+import { MarkdownText } from "./MarkdownText";
 
 interface MessageListProps {
   messages: Message[];
@@ -119,11 +120,11 @@ export function MessageList({
               borderRadius: 16,
               background: "#fff",
               boxShadow: "var(--shadow-soft)",
-              whiteSpace: "pre-wrap",
+              whiteSpace: "normal",
               wordBreak: "break-word",
             }}
           >
-            {streamingContent}
+            <MarkdownText content={streamingContent} />
             <span
               className="stream-cursor"
               style={{
