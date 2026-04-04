@@ -4,8 +4,10 @@ import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useAuthStore } from "@/stores/authStore";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { MainLayout } from "@/components/MainLayout";
 import { AuthPage } from "@/pages/AuthPage";
 import { ChatPage } from "@/pages/ChatPage";
+import { DiaryPage } from "@/pages/DiaryPage";
 
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate);
@@ -26,13 +28,15 @@ export default function App() {
         <Routes>
           <Route path="/auth" element={<AuthPage />} />
           <Route
-            path="/"
             element={
               <ProtectedRoute>
-                <ChatPage />
+                <MainLayout />
               </ProtectedRoute>
             }
-          />
+          >
+            <Route path="/" element={<ChatPage />} />
+            <Route path="/diary" element={<DiaryPage />} />
+          </Route>
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
