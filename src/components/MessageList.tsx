@@ -3,12 +3,15 @@ import type { Message } from "@/types";
 import dayjs from "dayjs";
 import { MessageBubble } from "./MessageBubble";
 import { Spin } from "antd";
-import { MarkdownText } from "./MarkdownText";
 
 interface MessageListProps {
   messages: Message[];
   loading?: boolean;
   loadingMore?: boolean;
+  /**
+   * 流式阶段：助手回复原文（纯文本逐字显示）；undefined 表示未在生成。
+   * 完成后由 MessageBubble + Markdown 一次性渲染，此处不再使用 Markdown。
+   */
   streamingContent?: string;
   onLoadMore?: () => void;
   hasMore?: boolean;
@@ -105,7 +108,7 @@ export function MessageList({
           <MessageBubble key={msg.id} message={msg} showDate={showDate} />
         );
       })}
-      {streamingContent !== undefined && streamingContent !== "" && (
+      {streamingContent !== undefined && (
         <div
           style={{
             display: "flex",
@@ -120,13 +123,17 @@ export function MessageList({
               borderRadius: 16,
               background: "#fff",
               boxShadow: "var(--shadow-soft)",
-              whiteSpace: "normal",
+              color: "#333",
+              fontSize: 15,
+              lineHeight: 1.65,
+              whiteSpace: "pre-wrap",
               wordBreak: "break-word",
             }}
           >
-            <MarkdownText content={streamingContent} />
+            {streamingContent}
             <span
               className="stream-cursor"
+              aria-hidden
               style={{
                 display: "inline-block",
                 width: 2,

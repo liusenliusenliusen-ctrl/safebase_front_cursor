@@ -5,6 +5,9 @@ import { SendOutlined, StopOutlined } from "@ant-design/icons";
 const { TextArea } = Input;
 
 interface ChatInputProps {
+  /** 受控模式：与 onChange 同时传入则由父组件管理输入内容（用于停止后回填草稿） */
+  value?: string;
+  onChange?: (value: string) => void;
   onSend: (text: string) => void;
   onStop?: () => void;
   disabled?: boolean;
@@ -12,19 +15,26 @@ interface ChatInputProps {
 }
 
 export function ChatInput({
+  value: valueProp,
+  onChange: onChangeProp,
   onSend,
   onStop,
   disabled,
   sending,
 }: ChatInputProps) {
-  const [value, setValue] = useState("");
+  const [internalValue, setInternalValue] = useState("");
+  const controlled = valueProp !== undefined && onChangeProp !== undefined;
+  const value = controlled ? valueProp! : internalValue;
+  const setValue = controlled ? onChangeProp! : setInternalValue;
 
   const send = useCallback(() => {
     const text = value.trim();
     if (!text || disabled || sending) return;
     onSend(text);
-    setValue("");
-  }, [value, onSend, disabled, sending]);
+    if (!controlled) {
+      setInternalValue("");
+    }
+  }, [value, onSend, disabled, sending, controlled]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -37,7 +47,7 @@ export function ChatInput({
     const text = e.clipboardData.getData("text/plain");
     if (text) {
       e.preventDefault();
-      setValue((v) => v + text);
+      setValue(value + text);
     }
   };
 

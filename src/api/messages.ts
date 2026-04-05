@@ -17,3 +17,8 @@ export async function fetchMessages(
   });
   return data;
 }
+
+/** 删除当前用户最近一条用户消息（停止生成时撤销本轮已保存的输入） */
+export async function deleteLastUserMessage(): Promise<void> {
+  await apiClient.delete("/api/messages/last-user");
+}

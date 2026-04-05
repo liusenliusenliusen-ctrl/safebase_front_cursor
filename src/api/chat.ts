@@ -50,7 +50,9 @@ export async function streamChat(
           if (cancelled) break;
           if (line.startsWith("data: ")) {
             const text = line.slice(6);
-            if (text) callbacks.onChunk(text);
+            if (text) {
+              callbacks.onChunk(text);
+            }
           }
           if (line.startsWith("event: end")) {
             callbacks.onEnd();
@@ -58,7 +60,10 @@ export async function streamChat(
           }
         }
       }
-      callbacks.onEnd();
+      // 正常结束且非用户取消时，才触发 onEnd（取消时不再拉取「完整回复」）
+      if (!cancelled) {
+        callbacks.onEnd();
+      }
     } catch (e) {
       if (!cancelled) callbacks.onError(e instanceof Error ? e : new Error(String(e)));
     }

@@ -62,7 +62,7 @@ export function MainLayout() {
     fontWeight: 500,
     fontSize: 15,
     textDecoration: "none",
-    color: isActive ? "#fff" : "#666",
+    color: isActive ? "#fff" : "var(--nav-inactive)",
     background: isActive ? "var(--accent)" : "transparent",
     transition: "background 0.2s, color 0.2s",
   });
@@ -96,7 +96,7 @@ export function MainLayout() {
           </span>
           <nav style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <NavLink to="/" end style={navLinkStyle}>
-              疗愈对话
+              对话
             </NavLink>
             <NavLink to="/diary" style={navLinkStyle}>
               我的日记
@@ -118,7 +118,12 @@ export function MainLayout() {
             >
               注销账号
             </Button>
-            <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout} style={{ color: "#666" }}>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+              style={{ color: "var(--nav-inactive)" }}
+            >
               退出登录
             </Button>
           </Space>
