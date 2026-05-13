@@ -5,7 +5,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, Input, Button, Tabs, message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
-import { login, register } from "@/api/auth";
+import { supabase } from "@/lib/supabase";
+import { usernameToAuthEmail } from "@/lib/authEmail";
 
 const schema = z.object({
   username: z.string().min(3, "用户名至少 3 个字符").max(64, "用户名最多 64 个字符"),
@@ -17,7 +18,7 @@ type FormValues = z.infer<typeof schema>;
 export function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, setAuth } = useAuthStore();
+  const { user, hydrated } = useAuthStore();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
   const {
@@ -31,30 +32,50 @@ export function AuthPage() {
   });
 
   useEffect(() => {
-    if (user) {
+    if (hydrated && user) {
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
       navigate(from, { replace: true });
     }
-  }, [user, navigate, location.state]);
+  }, [user, hydrated, navigate, location.state]);
 
   const onSubmit = async (values: FormValues) => {
+    const email = usernameToAuthEmail(values.username);
     try {
       if (activeTab === "register") {
-        const res = await register(values.username, values.password);
-        setAuth(res.user, res.token);
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: values.password,
+          options: { data: { username: values.username.trim() } },
+        });
+        if (error) throw error;
+        let session = data.session;
+        if (!session) {
+          const { data: s } = await supabase.auth.getSession();
+          session = s.session;
+        }
+        if (!session) {
+          message.info("注册已提交。若启用了邮箱验证请先确认邮件；本地 Supabase 一般可直接登录。");
+          return;
+        }
+        useAuthStore.getState().setSession(session);
         message.success("注册成功，欢迎你");
       } else {
-        const res = await login(values.username, values.password);
-        setAuth(res.user, res.token);
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: values.password,
+        });
+        if (error) throw error;
+        useAuthStore.getState().setSession(data.session);
         message.success("登录成功");
       }
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
       navigate(from, { replace: true });
     } catch (e: unknown) {
-      const msg = e && typeof e === "object" && "response" in e
-        ? (e as { response?: { data?: { detail?: string } } }).response?.data?.detail
-        : "操作失败，请重试";
-      message.error(msg || "操作失败，请重试");
+      const msg =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message: string }).message)
+          : "操作失败，请重试";
+      message.error(msg);
     }
   };
 
@@ -121,7 +142,7 @@ export function AuthPage() {
               name="username"
               control={control}
               render={({ field }) => (
-                <Input placeholder="用户名" size="large" {...field} />
+                <Input placeholder="用户名" size="large" autoComplete="username" {...field} />
               )}
             />
           </Form.Item>
@@ -133,7 +154,7 @@ export function AuthPage() {
               name="password"
               control={control}
               render={({ field }) => (
-                <Input.Password placeholder="密码" size="large" {...field} />
+                <Input.Password placeholder="登录密码" size="large" autoComplete="current-password" {...field} />
               )}
             />
           </Form.Item>
@@ -154,4 +175,3 @@ export function AuthPage() {
     </div>
   );
 }
-

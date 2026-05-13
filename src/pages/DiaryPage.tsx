@@ -20,7 +20,14 @@ import {
   SearchOutlined,
 } from "@ant-design/icons";
 import dayjs from "dayjs";
-import { createDiary, deleteDiary, listDiaries, updateDiary } from "@/api/diary";
+import { useAuthStore } from "@/stores/authStore";
+import {
+  createDiary,
+  deleteDiaryRow,
+  listDiaries,
+  listDiariesBatch,
+  updateDiary,
+} from "@/lib/diaryDb";
 import type { DiaryEntry } from "@/types";
 
 const { Text, Paragraph } = Typography;
@@ -33,6 +40,7 @@ function excerpt(text: string, max = 140) {
 }
 
 export function DiaryPage() {
+  const { user } = useAuthStore();
   const [items, setItems] = useState<DiaryEntry[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
@@ -45,24 +53,36 @@ export function DiaryPage() {
   const [form] = Form.useForm<{ title: string; content: string }>();
 
   const load = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     try {
-      const res = await listDiaries({
-        q: q.trim() || undefined,
-        page,
-        page_size: PAGE_SIZE,
-      });
-      setItems(res.items);
-      setTotal(res.total);
+      const qq = q.trim().toLowerCase();
+      if (qq) {
+        const all = await listDiariesBatch(user.id, 400);
+        const filtered = all.filter(
+          (row) =>
+            row.title.toLowerCase().includes(qq) || row.content.toLowerCase().includes(qq)
+        );
+        setTotal(filtered.length);
+        const from = (page - 1) * PAGE_SIZE;
+        setItems(filtered.slice(from, from + PAGE_SIZE));
+      } else {
+        const res = await listDiaries(user.id, {
+          page,
+          pageSize: PAGE_SIZE,
+        });
+        setItems(res.items);
+        setTotal(res.total);
+      }
     } catch {
       message.error("加载日记失败");
     } finally {
       setLoading(false);
     }
-  }, [page, q]);
+  }, [user, page, q]);
 
   useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   const openCreate = () => {
@@ -79,6 +99,7 @@ export function DiaryPage() {
   };
 
   const handleSave = async () => {
+    if (!user) return;
     try {
       const v = await form.validateFields();
       const title = (v.title ?? "").trim();
@@ -89,10 +110,10 @@ export function DiaryPage() {
       }
       setSaving(true);
       if (editing) {
-        await updateDiary(editing.id, { title, content });
+        await updateDiary(editing.id, title, content);
         message.success("已保存");
       } else {
-        await createDiary({ title, content });
+        await createDiary(user.id, title, content);
         message.success("日记已创建");
       }
       setDrawerOpen(false);
@@ -115,7 +136,7 @@ export function DiaryPage() {
       cancelText: "取消",
       onOk: async () => {
         try {
-          await deleteDiary(row.id);
+          await deleteDiaryRow(row.id);
           message.success("已删除");
           if (items.length === 1 && page > 1) {
             setPage((p) => p - 1);
@@ -162,7 +183,7 @@ export function DiaryPage() {
               <Text style={{ fontSize: 22, fontWeight: 600, color: "#2c3e3e" }}>我的日记</Text>
             </div>
             <Text type="secondary" style={{ fontSize: 14 }}>
-              记录心情与片段，随时搜索回顾。
+              明文存储，由数据库 RLS 限制仅本人可读写；访问会记入审计表。
             </Text>
           </div>
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={openCreate}>
@@ -172,7 +193,7 @@ export function DiaryPage() {
 
         <Input.Search
           size="large"
-          placeholder="搜索标题或正文…"
+          placeholder="搜索标题或正文（当前页/批量拉取后本地过滤）…"
           allowClear
           enterButton={
             <Button type="primary" icon={<SearchOutlined />}>

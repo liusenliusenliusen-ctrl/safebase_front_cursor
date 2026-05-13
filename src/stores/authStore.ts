@@ -1,42 +1,50 @@
 import { create } from "zustand";
+import type { Session } from "@supabase/supabase-js";
 import type { User } from "@/types";
+import { supabase } from "@/lib/supabase";
+
+function mapUser(session: Session | null): User | null {
+  const u = session?.user;
+  if (!u) return null;
+  const meta = u.user_metadata as { username?: string } | undefined;
+  return {
+    id: u.id,
+    email: u.email ?? "",
+    username: meta?.username ?? u.email?.split("@")[0] ?? "用户",
+  };
+}
 
 interface AuthState {
   user: User | null;
-  token: string | null;
+  session: Session | null;
   hydrated: boolean;
-  setAuth: (user: User, token: string) => void;
-  logout: () => void;
-  hydrate: () => void;
+  setSession: (session: Session | null) => void;
+  logout: () => Promise<void>;
+  hydrate: () => Promise<void>;
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  token: null,
+  session: null,
   hydrated: false,
-  setAuth: (user, token) => {
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(user));
-    set({ user, token });
+  setSession: (session) => {
+    set({
+      session,
+      user: mapUser(session),
+    });
   },
-  logout: () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    set({ user: null, token: null });
+  logout: async () => {
+    await supabase.auth.signOut();
+    set({ user: null, session: null });
   },
-  hydrate: () => {
-    const token = localStorage.getItem("token");
-    const userStr = localStorage.getItem("user");
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(userStr) as User;
-        set({ user, token, hydrated: true });
-        return;
-      } catch {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-      }
-    }
-    set({ user: null, token: null, hydrated: true });
+  hydrate: async () => {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    set({
+      session,
+      user: mapUser(session),
+      hydrated: true,
+    });
   },
 }));

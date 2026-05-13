@@ -1,10 +1,9 @@
 import { useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import axios from "axios";
 import { Button, Input, Modal, Space, message } from "antd";
 import { LogoutOutlined, UserDeleteOutlined } from "@ant-design/icons";
 import { useAuthStore } from "@/stores/authStore";
-import { deleteAccount } from "@/api/auth";
+import { supabase } from "@/lib/supabase";
 
 export function MainLayout() {
   const navigate = useNavigate();
@@ -20,34 +19,24 @@ export function MainLayout() {
 
   const handleConfirmDeleteAccount = async () => {
     if (deletePassword.length < 6) {
-      message.warning("请输入至少 6 位密码以确认注销");
+      message.warning("请输入至少 6 位字符以确认清除数据");
       return Promise.reject();
     }
     setDeletingAccount(true);
     try {
-      await deleteAccount(deletePassword);
-      message.success("账号已注销");
+      const { error } = await supabase.rpc("delete_my_data");
+      if (error) throw error;
+      message.success("已删除云端业务数据与审计记录（auth 账号仍在，可在 Studio 中手动删用户）");
       setDeleteModalOpen(false);
       setDeletePassword("");
-      logout();
+      await logout();
       navigate("/auth", { replace: true });
     } catch (e: unknown) {
-      if (axios.isAxiosError(e) && e.response?.data && typeof e.response.data === "object") {
-        const d = (e.response.data as { detail?: unknown }).detail;
-        const msg =
-          typeof d === "string"
-            ? d
-            : Array.isArray(d)
-              ? d
-                  .map((x) =>
-                    typeof x === "object" && x && "msg" in x ? String((x as { msg: unknown }).msg) : String(x)
-                  )
-                  .join("; ")
-              : "注销失败，请检查密码或网络";
-        message.error(msg);
-      } else {
-        message.error("注销失败，请检查网络");
-      }
+      const msg =
+        e && typeof e === "object" && "message" in e
+          ? String((e as { message: string }).message)
+          : "操作失败";
+      message.error(msg);
       return Promise.reject(e);
     } finally {
       setDeletingAccount(false);
@@ -144,10 +133,11 @@ export function MainLayout() {
         destroyOnClose
       >
         <p style={{ marginBottom: 12, color: "#666" }}>
-          将永久删除本账号及全部对话、日记、画像、摘要与锚点等数据，且不可恢复。请输入登录密码以确认。
+          将删除当前账号在数据库中的加密日记与对话等数据（Postgres 内由 RLS 保护）。Supabase Auth
+          用户记录需在本机 Studio 中另行删除。输入任意 6 位以上字符以确认。
         </p>
         <Input.Password
-          placeholder="登录密码"
+          placeholder="确认"
           value={deletePassword}
           onChange={(e) => setDeletePassword(e.target.value)}
           autoComplete="current-password"

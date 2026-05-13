@@ -1,26 +1,76 @@
-# CPTSD 疗愈伴侣 - 前端
+# CPTSD 疗愈伴侣 · 前端
 
-React + TypeScript 前端，与 [safebase_backend_cursor](../safebase_backend_cursor) 配套使用。
+React + TypeScript 主站。**数据与认证已落在 Supabase**（Postgres + Auth + Row Level Security），对话流式由 **Supabase Edge Function** `stream-chat` 提供。本仓库内含 `supabase/`（迁移与函数），与 [safebase_backend_cursor](../safebase_backend_cursor)（可选：管理 API、RAG 批处理、Celery）配合使用。
 
-## 功能
+## 功能概览
 
-- **认证**：注册、登录、持久化登录、路由保护
-- **对话**：与 AI 疗愈对话，流式输出，历史消息分页加载（首屏 20 条，上滑加载更多）
+- **认证**：Supabase Auth（注册 / 登录 / 会话）
+- **对话**：Edge Function 流式 SSE；会话与消息存于 Supabase（含 Realtime 等能力）
+- **日记 / 保险库**：客户端加密（E2EE）与 Supabase 存储协同（详见代码与迁移）
 
 ## 技术栈
 
-- React 18 + TypeScript
-- Vite
-- Ant Design 5、Zustand、React Router v6、react-hook-form + zod、axios、dayjs
+- React 18、TypeScript、Vite
+- `@supabase/supabase-js`
+- Ant Design 5、Zustand、React Router v6、react-hook-form + zod、dayjs
 
-## 开发
+## 本地开发
+
+### 1. 启动 Supabase（CLI）
+
+需安装 [Supabase CLI](https://supabase.com/docs/guides/cli/getting-started)。在项目根目录：
+
+```bash
+supabase start
+```
+
+记下终端输出的 **API URL** 与 **anon key**。
+
+### 2. 环境变量
+
+复制 `.env.example` 为 `.env`，填写：
+
+- `VITE_SUPABASE_URL`：如本地 `http://127.0.0.1:54321`
+- `VITE_SUPABASE_ANON_KEY`：Dashboard / `supabase status` 中的 **anon public** key（勿把 `service_role` 写进前端）
+
+### 3. Edge Function 密钥（对话）
+
+函数 `supabase/functions/stream-chat` 需要 OpenAI 密钥，例如：
+
+```bash
+supabase secrets set OPENAI_API_KEY=sk-...
+# 可选
+supabase secrets set OPENAI_MODEL=gpt-4o-mini
+```
+
+本地调试函数：
+
+```bash
+supabase functions serve stream-chat --no-verify-jwt   # 仅本地调试时按需使用
+```
+
+生产环境在 Supabase Dashboard → Edge Functions → Secrets 中配置同名变量。
+
+### 4. 安装与启动前端
 
 ```bash
 npm install
 npm run dev
 ```
 
-默认前端：<http://localhost:5173>。API 通过 Vite 代理到 `http://localhost:8000`（需先启动后端）。
+默认：<http://localhost:5173>。
+
+`vite.config.ts` 里仍将 `/api` 代理到 `http://127.0.0.1:8000`，供**可选**的 FastAPI（例如管理端或其它遗留接口）使用；主流程不依赖该代理。
+
+## 数据库迁移
+
+SQL 迁移位于 `supabase/migrations/`。本地在 `supabase start` 时会应用；重置数据库：
+
+```bash
+supabase db reset
+```
+
+从旧自建 Postgres 迁到 Supabase 时，可使用 `scripts/migrate_legacy_to_supabase.py`（需 `LEGACY_DATABASE_URL` 与 `TARGET_DATABASE_URL`，且 `auth.users.id` 与旧库用户一致）。详见脚本内注释。
 
 ## 构建
 
@@ -29,14 +79,8 @@ npm run build
 npm run preview
 ```
 
-## 环境变量
-
-可选 `.env`：
-
-- `VITE_API_BASE_URL`：后端 API 根地址。不设则使用相对路径 `/api`，依赖 Vite 代理或同域部署。
-
 ## 设计
 
 - 背景色 `#F5F0E8`，点缀色 `#A7C7C9`
-- 用户气泡 `#E3F2E8`，AI 气泡白底+轻阴影
+- 用户气泡 `#E3F2E8`，AI 气泡白底与轻阴影
 - 大圆角、宽松留白、温和文案

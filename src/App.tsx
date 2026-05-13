@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { ConfigProvider } from "antd";
 import zhCN from "antd/locale/zh_CN";
 import { useAuthStore } from "@/stores/authStore";
+import { supabase } from "@/lib/supabase";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { MainLayout } from "@/components/MainLayout";
 import { AuthPage } from "@/pages/AuthPage";
@@ -11,16 +12,20 @@ import { DiaryPage } from "@/pages/DiaryPage";
 
 export default function App() {
   const hydrate = useAuthStore((s) => s.hydrate);
+  const setSession = useAuthStore((s) => s.setSession);
 
   useEffect(() => {
-    hydrate();
+    void hydrate();
   }, [hydrate]);
 
   useEffect(() => {
-    const onLogout = () => useAuthStore.getState().logout();
-    window.addEventListener("auth:logout", onLogout);
-    return () => window.removeEventListener("auth:logout", onLogout);
-  }, []);
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      setSession(session);
+    });
+    return () => subscription.unsubscribe();
+  }, [setSession]);
 
   return (
     <ConfigProvider locale={zhCN}>
