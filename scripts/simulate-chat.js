@@ -6,7 +6,7 @@
  * 2. 在项目根目录创建或编辑 .env，配置：
  *    - API_BASE_URL（可选，默认 http://127.0.0.1:8000）
  *    - TEST_USERNAME / TEST_PASSWORD（测试账号，不存在会自动注册）
- *    - OPENROUTER_API_KEY 或 OPENAI_API_KEY（用于生成模拟用户消息的大模型）
+ *    - OPENROUTER_API_KEY（用于生成模拟用户消息的大模型，仅 OpenRouter）
  *    - FIRST_MESSAGE（可选；仅当数据库中没有任何历史消息时作为第一句，默认见下方）
  *    - SIMULATE_TURNS（可选，对话轮数，默认 5）
  *    - SIMULATE_HISTORY_MAX_MESSAGES（可选，载入历史时最多保留多少条消息参与生成，0=不截断；过长时保留最新 N 条）
@@ -61,27 +61,17 @@ function getOpenRouterProviderRouting() {
   };
 }
 
-// 生成模拟用户消息用的大模型配置（OpenRouter 或 OpenAI）
+// 生成模拟用户消息：仅 OpenRouter（与后端 FastAPI 的 LLM 配置一致）
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY?.trim();
-const OPENAI_API_KEY = process.env.OPENAI_API_KEY?.trim();
 const LLM_MODEL = process.env.SIMULATE_LLM_MODEL || "deepseek/deepseek-chat";
 
 function getLLMConfig() {
-  if (OPENROUTER_API_KEY) {
-    return {
-      url: "https://openrouter.ai/api/v1/chat/completions",
-      apiKey: OPENROUTER_API_KEY,
-      model: LLM_MODEL,
-    };
-  }
-  if (OPENAI_API_KEY) {
-    return {
-      url: "https://api.openai.com/v1/chat/completions",
-      apiKey: OPENAI_API_KEY,
-      model: process.env.SIMULATE_LLM_MODEL || "gpt-4o-mini",
-    };
-  }
-  return null;
+  if (!OPENROUTER_API_KEY) return null;
+  return {
+    url: "https://openrouter.ai/api/v1/chat/completions",
+    apiKey: OPENROUTER_API_KEY,
+    model: LLM_MODEL,
+  };
 }
 
 async function registerOrLogin() {
@@ -208,7 +198,7 @@ function buildUserSimulatorSystemPrompt(opening) {
 }
 
 /**
- * 非流式 JSON：兼容 OpenAI / OpenRouter 多种返回。
+ * 非流式 JSON：兼容多种 chat/completions 返回形状（历史遗留；当前脚本对模拟用户侧仅走 OpenRouter 流式）。
  */
 function extractChatCompletionText(data) {
   const choice = data?.choices?.[0];
@@ -408,16 +398,14 @@ async function generateNextUserMessage(llm, fullHistory, { opening = false } = {
   const headers = {
     "Content-Type": "application/json",
     Authorization: `Bearer ${llm.apiKey}`,
+    "HTTP-Referer": process.env.OPENROUTER_HTTP_REFERER || "https://github.com/safebase",
+    "X-Title": process.env.OPENROUTER_APP_TITLE || "simulate-chat",
+    Accept: "text/event-stream",
   };
-  if (llm.url.includes("openrouter.ai")) {
-    headers["HTTP-Referer"] = process.env.OPENROUTER_HTTP_REFERER || "https://github.com/safebase";
-    headers["X-Title"] = process.env.OPENROUTER_APP_TITLE || "simulate-chat";
-    headers["Accept"] = "text/event-stream";
-  }
 
   /** 重试策略：全量 → 截断最近 N 条 → 再截更短；middle-out 默认关闭（易导致流式空响应） */
   const truncateSteps = [null, 40, 20];
-  const useMiddleOut = llm.url.includes("openrouter.ai") && process.env.SIMULATE_OPENROUTER_MIDDLE_OUT === "1";
+  const useMiddleOut = process.env.SIMULATE_OPENROUTER_MIDDLE_OUT === "1";
 
   /** @type {unknown} */
   let lastFailedPayload = null;
@@ -432,13 +420,11 @@ async function generateNextUserMessage(llm, fullHistory, { opening = false } = {
       );
     }
 
-    const useOpenRouterStream = llm.url.includes("openrouter.ai");
     const useStructuredOpenRouter = process.env.SIMULATE_STRUCTURED_MESSAGES === "1";
-    const messages =
-      useOpenRouterStream && !useStructuredOpenRouter
-        ? buildOpenRouterFlattenedUserMessages(opening, slice)
-        : buildChatMessages(opening, slice);
-    if (useOpenRouterStream && attempt === 0) {
+    const messages = !useStructuredOpenRouter
+      ? buildOpenRouterFlattenedUserMessages(opening, slice)
+      : buildChatMessages(opening, slice);
+    if (attempt === 0) {
       if (useStructuredOpenRouter) {
         console.log("[模拟脚本] OpenRouter 使用 system+多轮消息（SIMULATE_STRUCTURED_MESSAGES=1）");
       } else {
@@ -458,57 +444,33 @@ async function generateNextUserMessage(llm, fullHistory, { opening = false } = {
       body.transforms = ["middle-out"];
     }
 
-    if (useOpenRouterStream) {
-      const routing = getOpenRouterProviderRouting();
-      if (routing.ignore?.length) {
-        body.provider = routing;
-        if (attempt === 0) {
-          console.log("[模拟脚本] OpenRouter provider.ignore =", routing.ignore.join(", "));
-        }
+    const routing = getOpenRouterProviderRouting();
+    if (routing.ignore?.length) {
+      body.provider = routing;
+      if (attempt === 0) {
+        console.log("[模拟脚本] OpenRouter provider.ignore =", routing.ignore.join(", "));
       }
     }
 
-    if (useOpenRouterStream) {
-      // 与后端一致：OpenRouter 用流式，避免部分路由非流式返回 message.content=null
-      const res = await fetch(llm.url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({ ...body, stream: true }),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`大模型请求失败: ${res.status} ${text}`);
-      }
-      const { text: content, rawSsePreview } = await accumulateOpenRouterStreamText(res);
-      if (content) return content;
-      lastFailedPayload = {
-        _note: "OpenRouter 流式解析后仍为空",
-        stream: true,
-        rawSsePreview: rawSsePreview || "(无原始字节)",
-        contentType: res.headers.get("content-type"),
-      };
-      console.warn(`[模拟脚本] OpenRouter 流式未解析到正文 (attempt ${attempt + 1})。`);
-    } else {
-      const res = await fetch(llm.url, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`大模型请求失败: ${res.status} ${text}`);
-      }
-      const data = await res.json();
-      lastFailedPayload = data;
-      const content = extractChatCompletionText(data);
-      if (content) return content;
-
-      const finish = data?.choices?.[0]?.finish_reason;
-      const usage = data?.usage;
-      console.warn(
-        `[模拟脚本] 本次调用未解析到正文 (attempt ${attempt + 1}, finish_reason=${finish}, usage=${JSON.stringify(usage)})。`
-      );
+    // 与后端一致：OpenRouter 流式，避免部分路由非流式返回 message.content=null
+    const res = await fetch(llm.url, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ ...body, stream: true }),
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`大模型请求失败: ${res.status} ${text}`);
     }
+    const { text: content, rawSsePreview } = await accumulateOpenRouterStreamText(res);
+    if (content) return content;
+    lastFailedPayload = {
+      _note: "OpenRouter 流式解析后仍为空",
+      stream: true,
+      rawSsePreview: rawSsePreview || "(无原始字节)",
+      contentType: res.headers.get("content-type"),
+    };
+    console.warn(`[模拟脚本] OpenRouter 流式未解析到正文 (attempt ${attempt + 1})。`);
     await sleep(400);
   }
 
@@ -532,7 +494,7 @@ async function main() {
   console.log("[模拟脚本] 对话轮数:", TURNS);
   const llm = getLLMConfig();
   if (!llm) {
-    console.error("[模拟脚本] 请设置 OPENROUTER_API_KEY 或 OPENAI_API_KEY 以生成模拟用户消息。");
+    console.error("[模拟脚本] 请设置 OPENROUTER_API_KEY 以生成模拟用户消息。");
     process.exit(1);
   }
 

@@ -35,21 +35,24 @@ supabase start
 
 ### 3. Edge Function 密钥（对话）
 
-函数 `supabase/functions/stream-chat` 需要 OpenAI 密钥，例如：
+函数 `supabase/functions/stream-chat` 通过 **OpenRouter** 调用模型（与后端 FastAPI 一致，均为兼容 OpenAI 的 `chat/completions` 流式接口）。必填 Secret：
 
 ```bash
-supabase secrets set OPENAI_API_KEY=sk-...
-# 可选
-supabase secrets set OPENAI_MODEL=gpt-4o-mini
+supabase secrets set OPENROUTER_API_KEY=sk-or-v1-...
+# 可选（有默认值）
+supabase secrets set OPENROUTER_CHAT_MODEL=deepseek/deepseek-chat
+# supabase secrets set OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
+# supabase secrets set OPENROUTER_HTTP_REFERER=https://你的站点
+# supabase secrets set OPENROUTER_APP_TITLE=Safebase
 ```
 
-本地调试函数：
+本地调试：可将 `supabase/functions/stream-chat/.env.example` 复制为同目录 `.env`，或使用 `supabase secrets set --local …`。然后：
 
 ```bash
 supabase functions serve stream-chat --no-verify-jwt   # 仅本地调试时按需使用
 ```
 
-生产环境在 Supabase Dashboard → Edge Functions → Secrets 中配置同名变量。
+生产环境在 Supabase Dashboard → **Edge Functions → Secrets** 中配置上述变量（勿把 Key 写进前端 `.env`）。
 
 ### 4. 安装与启动前端
 
@@ -60,7 +63,7 @@ npm run dev
 
 默认：<http://localhost:5173>。
 
-`vite.config.ts` 里仍将 `/api` 代理到 `http://127.0.0.1:8000`，供**可选**的 FastAPI（例如管理端或其它遗留接口）使用；主流程不依赖该代理。
+`vite.config.ts` 里仍将 `/api` 代理到 `http://127.0.0.1:8000`，供**可选**的 FastAPI（管理端、`npm run simulate-chat` 等）使用；主流程不依赖该代理。主站对话（Edge `stream-chat`）与可选后端 [safebase_backend_cursor](../safebase_backend_cursor) 的 LLM / embedding **均只使用 OpenRouter**；分别在各处配置 Secrets / `.env`（见上节与本仓库 `supabase/functions/stream-chat/.env.example`、后端 `.env.example`）。
 
 ## 数据库迁移
 
