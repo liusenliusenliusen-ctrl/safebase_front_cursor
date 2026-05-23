@@ -1,16 +1,10 @@
 import { create } from "zustand";
 import { streamChatCompletion } from "@/api/chatStream";
-import {
-  deleteLastUserMessage,
-  fetchMessagesPage,
-  insertChatMessage,
-} from "@/lib/chatDb";
+import { deleteLastUserMessage } from "@/lib/chatDb";
+
 const STREAM_CHAR_MS = 28;
 
-const CHAT_SYSTEM = `你是 CPTSD 疗愈中的陪伴者「北极星」：温情承接情绪、给予具体认可与安全感；可 gently 梳理困扰，避免说教与空洞口号。回复使用自然中文，段落简洁。`;
-
 interface ChatState {
-  sessionId: string | null;
   sending: boolean;
   draft: string;
   streamingContent: string | undefined;
@@ -18,11 +12,14 @@ interface ChatState {
   optimisticUserMsgId: string | null;
   needsSync: boolean;
   errorMessage: string | null;
-  setSessionId: (id: string | null) => void;
   setDraft: (value: string) => void;
   setOptimisticUserMsgId: (id: string | null) => void;
-  streamReply: (sessionId: string, subjectUserId: string, userPlain: string) => Promise<void>;
-  stopMessage: () => Promise<void>;
+  streamReply: (
+    userId: string,
+    userPlain: string,
+    userMessageId: string
+  ) => Promise<void>;
+  stopMessage: (userId: string | undefined) => Promise<void>;
   markSynced: () => void;
   clearError: () => void;
 }
@@ -46,26 +43,10 @@ function resetStreamRuntime() {
   streamEnded = false;
 }
 
-async function buildOpenAiMessages(
-  sessionId: string,
-  subjectUserId: string
-): Promise<{ role: string; content: string }[]> {
-  const { messages: hist } = await fetchMessagesPage({
-    sessionId,
-    subjectUserId,
-    limit: 30,
-    skipAudit: true,
-  });
-  return [
-    { role: "system", content: CHAT_SYSTEM },
-    ...hist.map((m) => ({ role: m.role, content: m.content })),
-  ];
-}
-
 function startTicker(
   set: (patch: Partial<ChatState>) => void,
   get: () => ChatState,
-  finalizeAssistant: () => void
+  onStreamDone: () => void
 ) {
   if (tickerId != null) return;
   tickerId = window.setInterval(() => {
@@ -78,7 +59,7 @@ function startTicker(
     }
     if (streamEnded) {
       clearTicker();
-      finalizeAssistant();
+      onStreamDone();
       return;
     }
     if (!get().sending && full.length === 0) {
@@ -88,7 +69,6 @@ function startTicker(
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
-  sessionId: null,
   sending: false,
   draft: "",
   streamingContent: undefined,
@@ -96,15 +76,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
   optimisticUserMsgId: null,
   needsSync: false,
   errorMessage: null,
-  setSessionId: (id) => set({ sessionId: id }),
   setDraft: (value) => set({ draft: value }),
   setOptimisticUserMsgId: (id) => set({ optimisticUserMsgId: id }),
   markSynced: () => set({ needsSync: false }),
   clearError: () => set({ errorMessage: null }),
 
-  streamReply: async (sessionId: string, subjectUserId: string, userPlain: string) => {
+  streamReply: async (userId, userPlain, userMessageId) => {
     set({
-      sessionId,
       lastSentText: userPlain,
       draft: "",
       sending: true,
@@ -115,57 +93,44 @@ export const useChatStore = create<ChatState>((set, get) => ({
     resetStreamRuntime();
     clearTicker();
 
-    const finalizeAssistant = () => {
-      const text = streamReceived;
+    const onStreamDone = () => {
       resetStreamRuntime();
       cancelStream = null;
-      if (text.trim()) {
-        void insertChatMessage(sessionId, "assistant", text.trim())
-          .catch(() => {
-            set({ errorMessage: "保存助手回复失败" });
-          })
-          .finally(() => {
+      set({
+        sending: false,
+        streamingContent: undefined,
+        optimisticUserMsgId: null,
+        needsSync: true,
+      });
+    };
+
+    startTicker(set, get, onStreamDone);
+
+    try {
+      const stop = await streamChatCompletion(
+        [{ role: "user", content: userPlain }],
+        { userMessageId },
+        {
+          onChunk: (chunk) => {
+            streamReceived += chunk;
+          },
+          onEnd: () => {
+            streamEnded = true;
+          },
+          onError: (err) => {
+            clearTicker();
+            resetStreamRuntime();
+            cancelStream = null;
             set({
               sending: false,
               streamingContent: undefined,
               optimisticUserMsgId: null,
+              errorMessage: err.message || "对话失败",
               needsSync: true,
             });
-          });
-      } else {
-        set({
-          sending: false,
-          streamingContent: undefined,
-          optimisticUserMsgId: null,
-          needsSync: true,
-        });
-      }
-    };
-
-    startTicker(set, get, finalizeAssistant);
-
-    try {
-      const messages = await buildOpenAiMessages(sessionId, subjectUserId);
-      const stop = await streamChatCompletion(messages, {
-        onChunk: (chunk) => {
-          streamReceived += chunk;
-        },
-        onEnd: () => {
-          streamEnded = true;
-        },
-        onError: (err) => {
-          clearTicker();
-          resetStreamRuntime();
-          cancelStream = null;
-          set({
-            sending: false,
-            streamingContent: undefined,
-            optimisticUserMsgId: null,
-            errorMessage: err.message || "对话失败",
-            needsSync: true,
-          });
-        },
-      });
+          },
+        }
+      );
       cancelStream = stop;
     } catch (err) {
       clearTicker();
@@ -181,14 +146,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }
   },
 
-  stopMessage: async () => {
+  stopMessage: async (userId) => {
     cancelStream?.();
     cancelStream = null;
     clearTicker();
     resetStreamRuntime();
 
     const text = get().lastSentText;
-    const sid = get().sessionId;
     set({
       sending: false,
       streamingContent: undefined,
@@ -196,11 +160,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
       optimisticUserMsgId: null,
     });
 
-    if (sid) {
+    if (userId) {
       try {
-        await deleteLastUserMessage(sid);
+        await deleteLastUserMessage(userId);
       } catch {
-        set({ errorMessage: "撤销本轮输入失败，请刷新后同步", needsSync: true });
+        set({
+          errorMessage: "撤销本轮输入失败，请刷新后同步",
+          needsSync: true,
+        });
       }
     }
   },

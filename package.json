@@ -7,15 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "simulate-chat": "node scripts/simulate-chat.js"
+    "preview": "vite preview"
   },
   "dependencies": {
     "@ant-design/icons": "^5.2.6",
     "@hookform/resolvers": "^3.9.0",
     "@supabase/supabase-js": "^2.78.0",
     "antd": "^5.14.0",
-    "axios": "^1.6.0",
     "dayjs": "^1.11.10",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

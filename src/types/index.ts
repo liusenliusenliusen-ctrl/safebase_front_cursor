@@ -6,11 +6,6 @@ export interface User {
   created_at?: string;
 }
 
-export interface TokenResponse {
-  token: string;
-  user: User;
-}
-
 export type MessageRole = "user" | "assistant";
 
 export interface Message {
@@ -18,11 +13,6 @@ export interface Message {
   role: MessageRole;
   content: string;
   created_at: string;
-}
-
-export interface MessageListResponse {
-  messages: Message[];
-  hasMore: boolean;
 }
 
 export interface DiaryEntry {
@@ -33,9 +23,3 @@ export interface DiaryEntry {
   updated_at: string;
 }
 
-export interface DiaryListResponse {
-  items: DiaryEntry[];
-  total: number;
-  page: number;
-  page_size: number;
-}

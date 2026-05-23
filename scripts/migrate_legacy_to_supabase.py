@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-将旧 FastAPI 使用的 Postgres（public.users + profiles/summaries/anchors/messages/diary_entries）
-中的业务表复制到 Supabase Postgres（auth.users + 同名业务表）。
+将旧 Postgres（public.users + profiles/summaries/anchors/messages 等）
+中的业务表复制到 Supabase Postgres（auth.users + 业务表）。主站已不用 public.users / chat_* / diary_entries。
 
 依赖：
   pip install psycopg2-binary
@@ -12,7 +12,7 @@
   python scripts/migrate_legacy_to_supabase.py
 
 前置条件（必做）：
-  1. 目标库已执行 supabase/migrations（含 profiles、summaries、anchors、messages、diary_entries）。
+  1. 目标库已执行 supabase/migrations（含 profiles、summaries、anchors、messages、diaries）。
   2. 旧库 users.id（uuid）与 Supabase auth.users.id 一一对应：
      每个旧用户需已在 Supabase 注册/导入，且 id 相同。
      若仅用户名相同而 id 不同，需先做 UUID 映射表或手工对齐后再跑本脚本。
@@ -47,10 +47,7 @@ def _toggle_audit_triggers(dst: PgConnection, enable: bool) -> None:
                 "summaries",
                 "anchors",
                 "messages",
-                "diary_entries",
                 "diaries",
-                "chat_sessions",
-                "chat_messages",
             )
         ):
             sp = f"sb_audit_{verb.lower()}_{i}"
@@ -230,34 +227,27 @@ def migrate(
                         (mid, uid, role, content, emb_arg, cat),
                     )
 
-                # diary_entries
+                # 旧 diary_entries → 主站 diaries（id 由目标库生成，仅迁内容）
                 s.execute(
                     """
-                    SELECT id, user_id::text, title, content, created_at, updated_at
+                    SELECT user_id::text, title, content, created_at, updated_at
                     FROM diary_entries
                     ORDER BY id
                     """
                 )
-                for did, uid, title, content, cat, uat in s.fetchall():
+                for uid, title, content, cat, uat in s.fetchall():
                     d.execute(
                         """
-                        INSERT INTO public.diary_entries
-                          (id, user_id, title, content, created_at, updated_at)
-                        VALUES (%s, %s::uuid, %s, %s, %s, %s)
-                        ON CONFLICT (id) DO UPDATE SET
-                          user_id = EXCLUDED.user_id,
-                          title = EXCLUDED.title,
-                          content = EXCLUDED.content,
-                          created_at = EXCLUDED.created_at,
-                          updated_at = EXCLUDED.updated_at
+                        INSERT INTO public.diaries (user_id, title, content, created_at, updated_at)
+                        VALUES (%s::uuid, %s, %s, %s, %s)
                         """,
-                        (did, uid, title, content, cat, uat),
+                        (uid, title, content, cat, uat),
                     )
 
             dst.commit()
 
             with dst.cursor() as d:
-                for tbl in ("summaries", "anchors", "messages", "diary_entries"):
+                for tbl in ("summaries", "anchors", "messages"):
                     d.execute(
                         "SELECT setval(pg_get_serial_sequence(%s, 'id'), COALESCE((SELECT MAX(id) FROM public.%s), 1), true)",
                         (f"public.{tbl}", tbl),

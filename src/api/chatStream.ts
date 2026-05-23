@@ -14,8 +14,13 @@ export interface StreamCallbacks {
 /**
  * 调用 Supabase Edge Function，将 OpenAI 流式结果转为与旧后端一致的 `data:` / `event: end` SSE。
  */
+export interface StreamChatOptions {
+  userMessageId: string;
+}
+
 export async function streamChatCompletion(
   messages: { role: string; content: string }[],
+  options: StreamChatOptions,
   callbacks: StreamCallbacks
 ): Promise<() => void> {
   const {
@@ -34,7 +39,10 @@ export async function streamChatCompletion(
       Authorization: `Bearer ${session.access_token}`,
       apikey: anon,
     },
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({
+      messages,
+      user_message_id: Number(options.userMessageId),
+    }),
   });
 
   if (!res.ok) {

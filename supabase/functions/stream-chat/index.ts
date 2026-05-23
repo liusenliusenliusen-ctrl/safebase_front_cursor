@@ -1,5 +1,14 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import {
+  buildMemoryPrompt,
+  extractLastUserMessage,
+} from "./rag.ts";
+import {
+  ensureDefaultProfile,
+  insertAssistantMessage,
+  updateUserMessageEmbedding,
+} from "./memory.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -7,7 +16,6 @@ const cors = {
     "authorization, x-client-info, apikey, content-type",
 };
 
-/** OpenRouter 与 OpenAI 兼容的 chat SSE；delta.content 有时为 string 或片段数组 */
 function deltaContentToString(delta: { content?: unknown } | undefined): string {
   const c = delta?.content;
   if (c == null) return "";
@@ -24,6 +32,34 @@ function deltaContentToString(delta: { content?: unknown } | undefined): string 
       .join("");
   }
   return String(c);
+}
+
+function openRouterConfig() {
+  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is not set");
+  }
+  const base = (Deno.env.get("OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1").replace(
+    /\/$/,
+    ""
+  );
+  const rawDim = Deno.env.get("OPENROUTER_EMBEDDING_DIMENSIONS");
+  let embeddingDimensions = 2048;
+  if (rawDim?.trim()) {
+    const n = parseInt(rawDim, 10);
+    if (Number.isFinite(n) && n > 0) embeddingDimensions = n;
+  }
+  return {
+    apiKey,
+    baseUrl: base,
+    chatModel: Deno.env.get("OPENROUTER_CHAT_MODEL") ?? "deepseek/deepseek-chat",
+    embeddingModel:
+      Deno.env.get("OPENROUTER_EMBEDDING_MODEL") ??
+      "openai/text-embedding-3-large",
+    embeddingDimensions,
+    referer: Deno.env.get("OPENROUTER_HTTP_REFERER") ?? "https://github.com/safebase",
+    title: Deno.env.get("OPENROUTER_APP_TITLE") ?? "safebase-stream-chat",
+  };
 }
 
 Deno.serve(async (req: Request) => {
@@ -56,7 +92,10 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  let body: { messages?: { role: string; content: string }[] };
+  let body: {
+    messages?: { role: string; content: string }[];
+    user_message_id?: number;
+  };
   try {
     body = await req.json();
   } catch {
@@ -66,43 +105,85 @@ Deno.serve(async (req: Request) => {
     });
   }
 
-  const messages = body.messages ?? [];
-  const apiKey = Deno.env.get("OPENROUTER_API_KEY");
-  if (!apiKey) {
+  const userMessageId = body.user_message_id;
+  if (userMessageId == null || !Number.isFinite(userMessageId)) {
+    return new Response(JSON.stringify({ error: "Missing user_message_id" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const userMessage = extractLastUserMessage(body.messages ?? []);
+  if (!userMessage) {
+    return new Response(JSON.stringify({ error: "Missing user message" }), {
+      status: 400,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  let orCfg;
+  try {
+    orCfg = openRouterConfig();
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return new Response(JSON.stringify({ error: msg }), {
+      status: 500,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+
+  const orEmbed = {
+    apiKey: orCfg.apiKey,
+    baseUrl: orCfg.baseUrl,
+    embeddingModel: orCfg.embeddingModel,
+    embeddingDimensions: orCfg.embeddingDimensions,
+  };
+
+  try {
+    await ensureDefaultProfile(supabase, user.id);
+    // 用户消息已由前端写入 messages；此处仅补 embedding，再拼 RAG
+    await updateUserMessageEmbedding(
+      supabase,
+      userMessageId,
+      userMessage,
+      orEmbed
+    );
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("update user message embedding failed:", msg);
     return new Response(
-      JSON.stringify({
-        error:
-          "OPENROUTER_API_KEY is not set for this function (use supabase secrets set …)",
-      }),
+      JSON.stringify({ error: `Prepare user message failed: ${msg}` }),
       {
-        status: 500,
+        status: 502,
         headers: { ...cors, "Content-Type": "application/json" },
-      },
+      }
     );
   }
 
-  const base = (Deno.env.get("OPENROUTER_BASE_URL") ?? "https://openrouter.ai/api/v1").replace(
-    /\/$/,
-    "",
-  );
-  const model =
-    Deno.env.get("OPENROUTER_CHAT_MODEL") ?? "deepseek/deepseek-chat";
-  const referer =
-    Deno.env.get("OPENROUTER_HTTP_REFERER") ?? "https://github.com/safebase";
-  const title = Deno.env.get("OPENROUTER_APP_TITLE") ?? "safebase-stream-chat";
+  let prompt: string;
+  try {
+    prompt = await buildMemoryPrompt(supabase, user.id, userMessage, orEmbed);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    console.error("buildMemoryPrompt failed:", msg);
+    return new Response(JSON.stringify({ error: `RAG context failed: ${msg}` }), {
+      status: 502,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
 
-  const upstreamRes = await fetch(`${base}/chat/completions`, {
+  const upstreamRes = await fetch(`${orCfg.baseUrl}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${orCfg.apiKey}`,
       "Content-Type": "application/json",
-      "HTTP-Referer": referer,
-      "X-Title": title,
+      "HTTP-Referer": orCfg.referer,
+      "X-Title": orCfg.title,
     },
     body: JSON.stringify({
-      model,
+      model: orCfg.chatModel,
       stream: true,
-      messages,
+      messages: [{ role: "user", content: prompt }],
     }),
   });
 
@@ -120,6 +201,7 @@ Deno.serve(async (req: Request) => {
 
   const stream = new ReadableStream({
     async start(controller) {
+      const parts: string[] = [];
       let carry = "";
       try {
         while (true) {
@@ -139,13 +221,29 @@ Deno.serve(async (req: Request) => {
               };
               const piece = deltaContentToString(json.choices?.[0]?.delta);
               if (piece) {
+                parts.push(piece);
                 controller.enqueue(encoder.encode(`data: ${piece}\n\n`));
               }
             } catch {
-              /* skip malformed */
+              /* skip */
             }
           }
         }
+
+        const fullText = parts.join("");
+        if (fullText.trim()) {
+          try {
+            await insertAssistantMessage(
+              supabase,
+              user.id,
+              fullText.trim(),
+              orEmbed
+            );
+          } catch (e) {
+            console.error("persist assistant message failed:", e);
+          }
+        }
+
         controller.enqueue(encoder.encode("event: end\n\n"));
       } catch (e) {
         controller.error(e);

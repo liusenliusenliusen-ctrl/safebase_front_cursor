@@ -2,6 +2,15 @@ import type { DiaryEntry } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { auditReadAccess } from "@/lib/auditLog";
 
+/** 写入 embedding 供 stream-chat RAG 检索（失败不阻塞保存） */
+function scheduleDiaryEmbeddingIndex(diaryId: number): void {
+  void supabase.functions
+    .invoke("index-diary", { body: { diary_id: diaryId } })
+    .then(({ error }) => {
+      if (error) console.warn("[diary] index-diary failed:", error.message);
+    });
+}
+
 export async function listDiaries(
   userId: string,
   params: { page: number; pageSize: number }
@@ -88,13 +97,15 @@ export async function createDiary(
     .single();
 
   if (error) throw new Error(error.message);
-  return {
+  const entry = {
     id: data.id as number,
     title,
     content,
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
   };
+  scheduleDiaryEmbeddingIndex(entry.id);
+  return entry;
 }
 
 export async function updateDiary(
@@ -110,13 +121,15 @@ export async function updateDiary(
     .single();
 
   if (error) throw new Error(error.message);
-  return {
+  const entry = {
     id: data.id as number,
     title,
     content,
     created_at: data.created_at as string,
     updated_at: data.updated_at as string,
   };
+  scheduleDiaryEmbeddingIndex(entry.id);
+  return entry;
 }
 
 export async function deleteDiaryRow(id: number): Promise<void> {

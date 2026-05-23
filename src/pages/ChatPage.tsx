@@ -3,7 +3,6 @@ import { message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
 import {
   fetchMessagesPage,
-  getOrCreateDefaultSession,
   insertChatMessage,
   subscribeChatMessages,
 } from "@/lib/chatDb";
@@ -16,7 +15,6 @@ const PAGE_SIZE = 20;
 
 export function ChatPage() {
   const { user } = useAuthStore();
-  const [sessionId, setSessionId] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -31,7 +29,6 @@ export function ChatPage() {
     errorMessage,
     setDraft,
     setOptimisticUserMsgId,
-    setSessionId: setStoreSessionId,
     streamReply,
     stopMessage,
     markSynced,
@@ -42,12 +39,8 @@ export function ChatPage() {
     if (!user) return;
     setLoading(true);
     try {
-      const sid = await getOrCreateDefaultSession(user.id);
-      setSessionId(sid);
-      setStoreSessionId(sid);
       const { messages: rows, hasMore: more } = await fetchMessagesPage({
-        sessionId: sid,
-        subjectUserId: user.id,
+        userId: user.id,
         limit: PAGE_SIZE,
       });
       setMessages(rows);
@@ -57,7 +50,7 @@ export function ChatPage() {
     } finally {
       setLoading(false);
     }
-  }, [user, setStoreSessionId]);
+  }, [user]);
 
   useEffect(() => {
     void loadInitial();
@@ -65,12 +58,11 @@ export function ChatPage() {
 
   const loadMore = useCallback(async () => {
     const oldest = messages[0];
-    if (!user || !sessionId || !oldest || loadingMore || !hasMore) return;
+    if (!user || !oldest || loadingMore || !hasMore) return;
     setLoadingMore(true);
     try {
       const { messages: older, hasMore: more } = await fetchMessagesPage({
-        sessionId,
-        subjectUserId: user.id,
+        userId: user.id,
         limit: PAGE_SIZE,
         before: oldest.id,
       });
@@ -81,14 +73,13 @@ export function ChatPage() {
     } finally {
       setLoadingMore(false);
     }
-  }, [user, sessionId, messages, loadingMore, hasMore]);
+  }, [user, messages, loadingMore, hasMore]);
 
   useEffect(() => {
-    if (!user || !needsSync || !sessionId) return;
+    if (!user || !needsSync) return;
     markSynced();
     void fetchMessagesPage({
-      sessionId,
-      subjectUserId: user.id,
+      userId: user.id,
       limit: 30,
     }).then(({ messages: fresh }) => {
       setMessages((prev) => {
@@ -102,7 +93,7 @@ export function ChatPage() {
         );
       });
     });
-  }, [user, needsSync, sessionId, markSynced]);
+  }, [user, needsSync, markSynced]);
 
   useEffect(() => {
     if (!errorMessage) return;
@@ -111,8 +102,8 @@ export function ChatPage() {
   }, [errorMessage, clearError]);
 
   useEffect(() => {
-    if (!sessionId) return;
-    const unsub = subscribeChatMessages(sessionId, (row) => {
+    if (!user) return;
+    const unsub = subscribeChatMessages(user.id, (row) => {
       const msg: Message = {
         id: row.id,
         role: row.role,
@@ -128,13 +119,13 @@ export function ChatPage() {
       });
     });
     return unsub;
-  }, [sessionId]);
+  }, [user]);
 
   const handleSend = useCallback(
     async (text: string) => {
-      if (!user || !sessionId) return;
+      if (!user) return;
       try {
-        const userMsg = await insertChatMessage(sessionId, "user", text);
+        const userMsg = await insertChatMessage(user.id, "user", text);
         setMessages((prev) =>
           [...prev, userMsg].sort(
             (a, b) =>
@@ -142,20 +133,20 @@ export function ChatPage() {
           )
         );
         setOptimisticUserMsgId(userMsg.id);
-        await streamReply(sessionId, user.id, text);
+        await streamReply(user.id, text, userMsg.id);
       } catch (e) {
         message.error(e instanceof Error ? e.message : "发送失败");
       }
     },
-    [user, sessionId, streamReply, setOptimisticUserMsgId]
+    [user, streamReply, setOptimisticUserMsgId]
   );
 
   const handleStop = useCallback(() => {
     if (optimisticUserMsgId != null) {
       setMessages((prev) => prev.filter((m) => m.id !== optimisticUserMsgId));
     }
-    void stopMessage();
-  }, [optimisticUserMsgId, stopMessage]);
+    void stopMessage(user?.id);
+  }, [optimisticUserMsgId, stopMessage, user?.id]);
 
   if (!user) return null;
 
