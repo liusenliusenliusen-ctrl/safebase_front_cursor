@@ -3,7 +3,6 @@ import { message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
 import {
   fetchMessagesPage,
-  insertChatMessage,
   subscribeChatMessages,
 } from "@/lib/chatDb";
 import { useChatStore } from "@/stores/chatStore";
@@ -28,8 +27,7 @@ export function ChatPage() {
     needsSync,
     errorMessage,
     setDraft,
-    setOptimisticUserMsgId,
-    streamReply,
+    sendChatMessage,
     stopMessage,
     markSynced,
     clearError,
@@ -104,6 +102,8 @@ export function ChatPage() {
   useEffect(() => {
     if (!user) return;
     const unsub = subscribeChatMessages(user.id, (row) => {
+      // 流式进行中时忽略 assistant 的 Realtime INSERT，避免完整消息与 streaming 气泡重复
+      if (row.role === "assistant" && useChatStore.getState().sending) return;
       const msg: Message = {
         id: row.id,
         role: row.role,
@@ -125,20 +125,19 @@ export function ChatPage() {
     async (text: string) => {
       if (!user) return;
       try {
-        const userMsg = await insertChatMessage(user.id, "user", text);
+        const userMsg = await sendChatMessage(user.id, text);
+        if (!userMsg) return;
         setMessages((prev) =>
           [...prev, userMsg].sort(
             (a, b) =>
               new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           )
         );
-        setOptimisticUserMsgId(userMsg.id);
-        await streamReply(user.id, text, userMsg.id);
       } catch (e) {
         message.error(e instanceof Error ? e.message : "发送失败");
       }
     },
-    [user, streamReply, setOptimisticUserMsgId]
+    [user, sendChatMessage]
   );
 
   const handleStop = useCallback(() => {

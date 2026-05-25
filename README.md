@@ -4,8 +4,10 @@
 
 配套服务（非主站运行时依赖）：
 
-- [safebase_backend_cursor](../safebase_backend_cursor) — Celery 定时任务 + 管理 API
+- [safebase_backend_cursor](../safebase_backend_cursor) — cron 夜间批处理 + 管理 API
 - [safebase_admin_cursor](../safebase_admin_cursor) — 运营查看用户与对话
+
+**三仓库整体说明（架构、数据流、本地联调）：** [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
 
 ## 架构总览
 
@@ -29,7 +31,7 @@
              ▼
 ┌────────────────────────────┐
 │  safebase_backend_cursor    │
-│  Celery + /api/admin/*      │
+│  run_tasks.py + /api/admin/*  │
 └────────────────────────────┘
 ```
 
@@ -60,7 +62,7 @@ Prompt 在 Edge 内拼装（`supabase/functions/stream-chat/prompt.ts` + `rag.ts
 
 ### 长期记忆（夜间加工）
 
-Celery（后端仓库）读取同一库的 `messages`、`diaries`，写入 `summaries`、`profiles`、`anchors`；次日对话时 Edge 再检索这些表。详见后端 README。
+夜间批处理（后端仓库 `scripts/run_tasks.py` + cron）读取同一库的 `messages`、`diaries`，写入 `summaries`、`profiles`、`anchors`；次日对话时 Edge 再检索这些表。详见后端 README。
 
 ## 数据库（`supabase/migrations/`）
 
@@ -68,9 +70,9 @@ Celery（后端仓库）读取同一库的 `messages`、`diaries`，写入 `summ
 |----|------|
 | `auth.users` | Supabase Auth 用户（业务表 `user_id` 外键指向此处） |
 | `messages` | 对话唯一存储（user/assistant + `embedding`） |
-| `diaries` | 日记正文 + `embedding`（RAG / Celery） |
+| `diaries` | 日记正文 + `embedding`（RAG / 夜间批处理） |
 | `profiles` | 长期画像 Markdown |
-| `summaries` | 日/周/月/年摘要（Celery 写 `type=daily` 等） |
+| `summaries` | 日/周/月/年摘要（批处理写 `type=daily` 等） |
 | `anchors` | 重要事件锚点 |
 | `user_crypto` | 保险箱 salt/校验包（可选能力，见下） |
 | `data_access_audit` | 访问审计 |
@@ -139,9 +141,9 @@ npm run dev
 
 默认 <http://localhost:5173>。
 
-### 4. 可选：Celery 与管理端
+### 4. 可选：批处理与管理端
 
-见 [safebase_backend_cursor](../safebase_backend_cursor) README：配置 `DATABASE_URL` 指向同一 Supabase DB（直连端口常为 `54322`），启动 `uvicorn` 与 `celery worker -B`。
+见 [safebase_backend_cursor](../safebase_backend_cursor) README：配置 `DATABASE_URL` 指向同一 Supabase DB（直连端口常为 `54322`），启动 `uvicorn`；夜间任务用 `python scripts/run_tasks.py` 或 crontab。
 
 ## 脚本
 

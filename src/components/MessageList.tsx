@@ -130,7 +130,7 @@ export function MessageList({
               wordBreak: "break-word",
             }}
           >
-            {streamingContent}
+            {streamingContent || "正在思考…"}
             <span
               className="stream-cursor"
               aria-hidden

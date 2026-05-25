@@ -61,7 +61,14 @@ export async function streamChatCompletion(
 
   const decoder = new TextDecoder();
   let cancelled = false;
+  let ended = false;
   let buffer = "";
+
+  const endOnce = () => {
+    if (ended || cancelled) return;
+    ended = true;
+    callbacks.onEnd();
+  };
 
   (async () => {
     try {
@@ -78,14 +85,14 @@ export async function streamChatCompletion(
             if (text) callbacks.onChunk(text);
           }
           if (line.startsWith("event: end")) {
-            callbacks.onEnd();
+            endOnce();
             return;
           }
         }
       }
-      if (!cancelled) callbacks.onEnd();
+      endOnce();
     } catch (e) {
-      if (!cancelled)
+      if (!cancelled && !ended)
         callbacks.onError(e instanceof Error ? e : new Error(String(e)));
     }
   })();

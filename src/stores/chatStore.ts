@@ -1,8 +1,7 @@
 import { create } from "zustand";
 import { streamChatCompletion } from "@/api/chatStream";
-import { deleteLastUserMessage } from "@/lib/chatDb";
-
-const STREAM_CHAR_MS = 28;
+import { deleteLastUserMessage, insertChatMessage } from "@/lib/chatDb";
+import type { Message } from "@/types";
 
 interface ChatState {
   sending: boolean;
@@ -14,59 +13,17 @@ interface ChatState {
   errorMessage: string | null;
   setDraft: (value: string) => void;
   setOptimisticUserMsgId: (id: string | null) => void;
-  streamReply: (
+  sendChatMessage: (
     userId: string,
-    userPlain: string,
-    userMessageId: string
-  ) => Promise<void>;
+    text: string
+  ) => Promise<Message | null>;
   stopMessage: (userId: string | undefined) => Promise<void>;
   markSynced: () => void;
   clearError: () => void;
 }
 
-let streamReceived = "";
-let streamDisplayedLen = 0;
-let streamEnded = false;
 let cancelStream: (() => void) | null = null;
-let tickerId: number | null = null;
-
-function clearTicker() {
-  if (tickerId != null) {
-    window.clearInterval(tickerId);
-    tickerId = null;
-  }
-}
-
-function resetStreamRuntime() {
-  streamReceived = "";
-  streamDisplayedLen = 0;
-  streamEnded = false;
-}
-
-function startTicker(
-  set: (patch: Partial<ChatState>) => void,
-  get: () => ChatState,
-  onStreamDone: () => void
-) {
-  if (tickerId != null) return;
-  tickerId = window.setInterval(() => {
-    const full = streamReceived;
-    const len = streamDisplayedLen;
-    if (len < full.length) {
-      streamDisplayedLen = len + 1;
-      set({ streamingContent: full.slice(0, streamDisplayedLen) });
-      return;
-    }
-    if (streamEnded) {
-      clearTicker();
-      onStreamDone();
-      return;
-    }
-    if (!get().sending && full.length === 0) {
-      clearTicker();
-    }
-  }, STREAM_CHAR_MS);
-}
+let streamFinished = false;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sending: false,
@@ -81,20 +38,37 @@ export const useChatStore = create<ChatState>((set, get) => ({
   markSynced: () => set({ needsSync: false }),
   clearError: () => set({ errorMessage: null }),
 
-  streamReply: async (userId, userPlain, userMessageId) => {
+  sendChatMessage: async (userId, text) => {
+    const plain = text.trim();
+    if (!plain || get().sending) return null;
+
+    streamFinished = false;
     set({
-      lastSentText: userPlain,
+      lastSentText: plain,
       draft: "",
       sending: true,
       streamingContent: "",
       needsSync: false,
       errorMessage: null,
     });
-    resetStreamRuntime();
-    clearTicker();
 
-    const onStreamDone = () => {
-      resetStreamRuntime();
+    let userMsg: Message;
+    try {
+      userMsg = await insertChatMessage(userId, "user", plain);
+    } catch (err) {
+      set({
+        sending: false,
+        streamingContent: undefined,
+        errorMessage: err instanceof Error ? err.message : "发送失败",
+      });
+      return null;
+    }
+
+    set({ optimisticUserMsgId: userMsg.id });
+
+    const finishStream = () => {
+      if (streamFinished) return;
+      streamFinished = true;
       cancelStream = null;
       set({
         sending: false,
@@ -104,22 +78,21 @@ export const useChatStore = create<ChatState>((set, get) => ({
       });
     };
 
-    startTicker(set, get, onStreamDone);
-
     try {
       const stop = await streamChatCompletion(
-        [{ role: "user", content: userPlain }],
-        { userMessageId },
+        [{ role: "user", content: plain }],
+        { userMessageId: userMsg.id },
         {
           onChunk: (chunk) => {
-            streamReceived += chunk;
+            set((state) => ({
+              streamingContent: (state.streamingContent ?? "") + chunk,
+            }));
           },
           onEnd: () => {
-            streamEnded = true;
+            finishStream();
           },
           onError: (err) => {
-            clearTicker();
-            resetStreamRuntime();
+            streamFinished = true;
             cancelStream = null;
             set({
               sending: false,
@@ -133,8 +106,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       );
       cancelStream = stop;
     } catch (err) {
-      clearTicker();
-      resetStreamRuntime();
+      streamFinished = true;
       cancelStream = null;
       set({
         sending: false,
@@ -144,13 +116,14 @@ export const useChatStore = create<ChatState>((set, get) => ({
         needsSync: true,
       });
     }
+
+    return userMsg;
   },
 
   stopMessage: async (userId) => {
     cancelStream?.();
     cancelStream = null;
-    clearTicker();
-    resetStreamRuntime();
+    streamFinished = true;
 
     const text = get().lastSentText;
     set({
