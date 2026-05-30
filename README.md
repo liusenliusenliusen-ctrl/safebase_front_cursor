@@ -9,6 +9,8 @@
 
 **三仓库整体说明（架构、数据流、本地联调）：** [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
 
+**生产部署（火山 Supabase + 服务器打包）：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+
 ## 架构总览
 
 ```text
