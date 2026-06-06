@@ -51,7 +51,7 @@ async function fetchRecentDiariesFallback(
 }
 
 /**
- * 与 FastAPI build_memory_context 对齐：
+ * 与 backend 夜间记忆上下文结构对齐：
  * - 近期对话来自 public.messages（须已写入本轮 user 消息）
  * - summaries / anchors 向量检索
  * - diaries 向量检索（主站扩展）

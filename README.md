@@ -9,7 +9,7 @@
 
 **三仓库整体说明（架构、数据流、本地联调）：** [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
 
-**生产部署（火山 Supabase + 服务器打包）：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+**生产部署（自建 Supabase Docker + 服务器）：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 
 ## 架构总览
 
@@ -33,7 +33,7 @@
              ▼
 ┌────────────────────────────┐
 │  safebase_backend_cursor    │
-│  run_tasks.py + /api/admin/*  │
+│  run-tasks.ts + /api/admin/*  │
 └────────────────────────────┘
 ```
 
@@ -64,7 +64,7 @@ Prompt 在 Edge 内拼装（`supabase/functions/stream-chat/prompt.ts` + `rag.ts
 
 ### 长期记忆（夜间加工）
 
-夜间批处理（后端仓库 `scripts/run_tasks.py` + cron）读取同一库的 `messages`、`diaries`，写入 `summaries`、`profiles`、`anchors`；次日对话时 Edge 再检索这些表。详见后端 README。
+夜间批处理（后端仓库 `scripts/run-tasks.ts` + cron）读取同一库的 `messages`、`diaries`，写入 `summaries`、`profiles`、`anchors`；次日对话时 Edge 再检索这些表。详见后端 README。
 
 ## 数据库（`supabase/migrations/`）
 
@@ -145,7 +145,7 @@ npm run dev
 
 ### 4. 可选：批处理与管理端
 
-见 [safebase_backend_cursor](../safebase_backend_cursor) README：配置 `DATABASE_URL` 指向同一 Supabase DB（直连端口常为 `54322`），启动 `uvicorn`；夜间任务用 `python scripts/run_tasks.py` 或 crontab。
+见 [safebase_backend_cursor](../safebase_backend_cursor) README：配置 `DATABASE_URL` 指向同一 Supabase DB（本地直连端口 `54322`），`npm run dev`；夜间任务用 `npm run tasks` 或 crontab。
 
 ## 脚本
 

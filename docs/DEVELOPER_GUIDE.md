@@ -1,6 +1,6 @@
 # SafeBase 开发者指南
 
-面向幸存者的 CPTSD 陪伴产品。系统由 **三个独立 Git 仓库** 组成，共享 **同一套 Supabase Postgres**（本地 `127.0.0.1:54322`，生产为 Supabase 云端项目）。
+面向幸存者的 CPTSD 陪伴产品。系统由 **三个独立 Git 仓库** 组成，共享 **同一套自建 Supabase Postgres**（本地 `supabase start` → `127.0.0.1:54322`；生产为服务器 Docker 自托管，见 [DEPLOYMENT.md](./DEPLOYMENT.md)）。
 
 | 仓库 | 路径示例 | 职责 |
 |------|----------|------|
@@ -23,7 +23,7 @@ flowchart TB
     Admin[管理后台 :5174]
   end
 
-  subgraph supabase [Supabase 本地/云端]
+  subgraph supabase [Supabase 本地/生产 Docker]
     Auth[GoTrue Auth]
     Kong[Kong API :54321]
     PG[(Postgres + pgvector)]
@@ -38,7 +38,7 @@ flowchart TB
 
   subgraph backend [safebase_backend_cursor :8000]
     AdminAPI["/api/admin/*"]
-    CronTasks["run_tasks.py (cron)"]
+    CronTasks["run-tasks.ts (cron)"]
   end
 
   OpenRouter[OpenRouter API]
@@ -80,7 +80,7 @@ Edge Functions 运行在 **Deno**（Supabase Edge Runtime），源码在 `supaba
 | 流式对话 + RAG | Edge `stream-chat` | 拼 prompt、调 OpenRouter、写 assistant 消息 |
 | 日记 CRUD | 前端 + PostgREST | `diaries` 表 |
 | 日记向量索引 | Edge `index-diary` | 保存后异步写 `diaries.embedding` |
-| 日摘要 / 画像 / 锚点 | cron + `run_tasks.py`（backend） | 读 `messages`/`diaries`，写 `summaries`/`profiles`/`anchors` |
+| 日摘要 / 画像 / 锚点 | cron + `run-tasks.ts`（backend） | 读 `messages`/`diaries`，写 `summaries`/`profiles`/`anchors` |
 | 用户列表与统计 | Node admin API + admin 前端 | 查 `auth.users` + 业务表计数 |
 
 **已废弃、勿再依赖：** FastAPI 的 `/api/auth`、`/api/chat`、`/api/messages`、`/api/diary`；表 `chat_sessions`、`chat_messages`、`diary_entries`、`public.users`。
@@ -175,7 +175,7 @@ DiaryPage 创建/更新
 ### 2.5 夜间记忆（cron 批处理）
 
 ```text
-cron → scripts/run_tasks.py
+cron → scripts/run-tasks.ts
   → generate_daily_summaries
       读：昨日 messages + 昨日更新的 diaries
       写：summaries(type=daily) + embedding
@@ -190,9 +190,9 @@ cron → scripts/run_tasks.py
 
 | 任务 | 建议时间 | 命令 |
 |------|----------|------|
-| 日摘要 | 23:30 | `python scripts/run_tasks.py daily` |
-| 画像更新 | 00:10 | `python scripts/run_tasks.py profiles` |
-| 锚点维护 | 00:30 | `python scripts/run_tasks.py anchors` |
+| 日摘要 | 23:30 | `node dist/scripts/run-tasks.js daily` |
+| 画像更新 | 00:10 | `node dist/scripts/run-tasks.js profiles` |
+| 锚点维护 | 00:30 | `node dist/scripts/run-tasks.js anchors` |
 
 **活跃用户数** = `profiles.user_id` ∪ `messages.user_id` 的去重并集。
 
@@ -358,7 +358,7 @@ npm run tasks -- daily
 npm run tasks -- profiles anchors
 ```
 
-生产环境用 crontab 定时调用 `run_tasks.py`，见 backend 仓库 `scripts/cron.example`。
+生产环境用 crontab 定时调用 `run-tasks.js`，见 backend 仓库 `scripts/cron.example`。
 
 ### 6.3 管理后台（可选）
 
@@ -378,7 +378,7 @@ npm install && npm run dev   # http://localhost:5174
 | Studio | 54323 |
 | 主站 Vite | 5173 |
 | 管理 Vite | 5174 |
-| FastAPI | 8000 |
+| Node backend (Fastify) | 8000 |
 
 （无 Redis — 批处理由系统 cron 触发）
 
@@ -433,31 +433,33 @@ src/
 | 场景 | Prompt 位置 | 模型调用 |
 |------|-------------|----------|
 | 用户实时对话 | `supabase/functions/stream-chat/prompt.ts` | Edge → OpenRouter chat + embedding |
-| 日摘要 | `backend/prompts/daily_summary.txt` | run_tasks.py → OpenRouter |
-| 画像更新 | `backend/prompts/profile_update.txt` | run_tasks.py |
-| 锚点提取/更新 | `backend/prompts/anchor_*.txt` | run_tasks.py |
+| 日摘要 | `backend/prompts/daily_summary.txt` | `run-tasks.ts` → OpenRouter |
+| 画像更新 | `backend/prompts/profile_update.txt` | `run-tasks.ts` |
+| 锚点提取/更新 | `backend/prompts/anchor_*.txt` | `run-tasks.ts` |
 
-Backend 通过 `app/prompting.py` 加载模板：内嵌默认 + 可选文件覆盖（`PROMPT_TEMPLATE_DIR`）。
+Backend 通过 `src/prompts/index.ts` 加载模板：内嵌默认 + 可选文件覆盖（`PROMPT_TEMPLATE_DIR`）。
 
 ---
 
 ## 9. 部署要点
 
-### 9.1 主站（Supabase + 静态前端）
+生产环境采用 **服务器自建 Supabase（Docker）**，与本地 `supabase start` 使用同一套迁移与 Edge 源码。完整步骤见 **[DEPLOYMENT.md](./DEPLOYMENT.md)**。
 
-1. 关联 Supabase 项目，`supabase db push` 或 CI 跑迁移。
-2. `supabase functions deploy stream-chat index-diary`
-3. `supabase secrets set OPENROUTER_API_KEY=...`（及可选模型变量）
-4. 前端构建时注入 `VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`
+摘要：
 
-### 9.2 后端批处理
+1. Docker 启动 Supabase → `supabase db push` 应用迁移  
+2. `supabase functions deploy stream-chat index-diary` + `supabase secrets set`  
+3. 构建 front/admin 静态资源 + PM2 跑 backend  
+4. Nginx 托管静态页并反代 Supabase API、`/api/admin`  
 
-- 在能访问 `DATABASE_URL` 的机器上配置 **crontab** 调用 `scripts/run_tasks.py`（见 `scripts/cron.example`）。
-- 可与 Node API 同机，也可分离；**无需 Redis**。
+### 9.1 后端批处理
 
-### 9.3 管理后台
+- 在能访问 `DATABASE_URL` 的机器上配置 **crontab** 调用 `dist/scripts/run-tasks.js`（见 `scripts/cron.example`）。
+- 可与 Node API 同机；**无需 Redis**。
 
-- 构建时设置 `VITE_API_BASE_URL` 指向生产 backend（Fastify），或由网关统一转发 `/api/admin`。
+### 9.2 管理后台
+
+- 构建时设置 `VITE_API_BASE_URL` 指向生产 backend，或由 Nginx 统一转发 `/api`。
 
 ---
 
