@@ -1,4 +1,4 @@
-# SafeBase 开发者指南
+# SafeBase 开发指南
 
 面向幸存者的 CPTSD 陪伴产品。系统由 **三个独立 Git 仓库** 组成，共享 **同一套自建 Supabase Postgres**（本地 `supabase start` → `127.0.0.1:54322`；生产为服务器 Docker 自托管，见 [DEPLOYMENT.md](./DEPLOYMENT.md)）。
 

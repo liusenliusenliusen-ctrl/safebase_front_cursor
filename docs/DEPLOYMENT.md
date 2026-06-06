@@ -9,7 +9,7 @@
 | `safebase_backend_cursor` | Node API + 夜间 cron | `dist/` + `package.json` | 是（PM2） |
 | **Supabase（Docker）** | Auth、PostgREST、Realtime、Edge、Postgres | 官方 `docker` 栈 | 是（Docker Compose） |
 
-相关文档：[DEVELOPER_GUIDE.md](./DEVELOPER_GUIDE.md)（架构与本地开发）
+相关文档：[DEVELOPMENT.md](./DEVELOPMENT.md)（架构与本地开发）
 
 ---
 

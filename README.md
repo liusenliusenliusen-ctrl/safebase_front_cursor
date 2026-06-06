@@ -7,7 +7,7 @@
 - [safebase_backend_cursor](../safebase_backend_cursor) — cron 夜间批处理 + 管理 API
 - [safebase_admin_cursor](../safebase_admin_cursor) — 运营查看用户与对话
 
-**三仓库整体说明（架构、数据流、本地联调）：** [docs/DEVELOPER_GUIDE.md](./docs/DEVELOPER_GUIDE.md)
+**三仓库整体说明（架构、数据流、本地联调）：** [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)
 
 **生产部署（自建 Supabase Docker + 服务器）：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
 
