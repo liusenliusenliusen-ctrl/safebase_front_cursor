@@ -5,8 +5,6 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, Input, Button, Tabs, message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
-import { supabase } from "@/lib/supabase";
-import { usernameToAuthEmail } from "@/lib/authEmail";
 
 const schema = z.object({
   username: z.string().min(3, "用户名至少 3 个字符").max(64, "用户名最多 64 个字符"),
@@ -18,7 +16,7 @@ type FormValues = z.infer<typeof schema>;
 export function AuthPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { user, hydrated } = useAuthStore();
+  const { user, hydrated, login, register } = useAuthStore();
   const [activeTab, setActiveTab] = useState<"login" | "register">("login");
 
   const {
@@ -39,42 +37,18 @@ export function AuthPage() {
   }, [user, hydrated, navigate, location.state]);
 
   const onSubmit = async (values: FormValues) => {
-    const email = usernameToAuthEmail(values.username);
     try {
       if (activeTab === "register") {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: values.password,
-          options: { data: { username: values.username.trim() } },
-        });
-        if (error) throw error;
-        let session = data.session;
-        if (!session) {
-          const { data: s } = await supabase.auth.getSession();
-          session = s.session;
-        }
-        if (!session) {
-          message.info("注册已提交。若启用了邮箱验证请先确认邮件；本地 Supabase 一般可直接登录。");
-          return;
-        }
-        useAuthStore.getState().setSession(session);
+        await register(values.username.trim(), values.password);
         message.success("注册成功，欢迎你");
       } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password: values.password,
-        });
-        if (error) throw error;
-        useAuthStore.getState().setSession(data.session);
+        await login(values.username.trim(), values.password);
         message.success("登录成功");
       }
       const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? "/";
       navigate(from, { replace: true });
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "message" in e
-          ? String((e as { message: string }).message)
-          : "操作失败，请重试";
+      const msg = e instanceof Error ? e.message : "操作失败，请重试";
       message.error(msg);
     }
   };

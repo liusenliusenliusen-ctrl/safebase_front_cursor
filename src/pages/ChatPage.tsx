@@ -3,7 +3,6 @@ import { message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
 import {
   fetchMessagesPage,
-  subscribeChatMessages,
 } from "@/lib/chatDb";
 import { useChatStore } from "@/stores/chatStore";
 import type { Message } from "@/types";
@@ -98,28 +97,6 @@ export function ChatPage() {
     message.error(errorMessage);
     clearError();
   }, [errorMessage, clearError]);
-
-  useEffect(() => {
-    if (!user) return;
-    const unsub = subscribeChatMessages(user.id, (row) => {
-      // 流式进行中时忽略 assistant 的 Realtime INSERT，避免完整消息与 streaming 气泡重复
-      if (row.role === "assistant" && useChatStore.getState().sending) return;
-      const msg: Message = {
-        id: row.id,
-        role: row.role,
-        content: row.content,
-        created_at: row.created_at,
-      };
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === msg.id)) return prev;
-        return [...prev, msg].sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        );
-      });
-    });
-    return unsub;
-  }, [user]);
 
   const handleSend = useCallback(
     async (text: string) => {

@@ -3,7 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { Button, Input, Modal, Space, message } from "antd";
 import { LogoutOutlined, UserDeleteOutlined } from "@ant-design/icons";
 import { useAuthStore } from "@/stores/authStore";
-import { supabase } from "@/lib/supabase";
+import { apiFetch } from "@/api/client";
 
 export function MainLayout() {
   const navigate = useNavigate();
@@ -24,18 +24,18 @@ export function MainLayout() {
     }
     setDeletingAccount(true);
     try {
-      const { error } = await supabase.rpc("delete_my_data");
-      if (error) throw error;
-      message.success("已删除云端业务数据与审计记录（auth 账号仍在，可在 Studio 中手动删用户）");
+      const res = await apiFetch("/api/account", { method: "DELETE" });
+      if (!res.ok) {
+        const body = await res.text();
+        throw new Error(body || res.statusText);
+      }
+      message.success("账号及全部数据已删除");
       setDeleteModalOpen(false);
       setDeletePassword("");
-      await logout();
+      logout();
       navigate("/auth", { replace: true });
     } catch (e: unknown) {
-      const msg =
-        e && typeof e === "object" && "message" in e
-          ? String((e as { message: string }).message)
-          : "操作失败";
+      const msg = e instanceof Error ? e.message : "操作失败";
       message.error(msg);
       return Promise.reject(e);
     } finally {
@@ -133,8 +133,7 @@ export function MainLayout() {
         destroyOnClose
       >
         <p style={{ marginBottom: 12, color: "#666" }}>
-          将删除当前账号在数据库中的加密日记与对话等数据（Postgres 内由 RLS 保护）。Supabase Auth
-          用户记录需在本机 Studio 中另行删除。输入任意 6 位以上字符以确认。
+          将永久删除当前账号及全部对话、日记与记忆数据，且无法恢复。输入任意 6 位以上字符以确认。
         </p>
         <Input.Password
           placeholder="确认"

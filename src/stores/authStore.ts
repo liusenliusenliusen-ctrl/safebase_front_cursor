@@ -1,50 +1,78 @@
 import { create } from "zustand";
-import type { Session } from "@supabase/supabase-js";
 import type { User } from "@/types";
-import { supabase } from "@/lib/supabase";
+import { apiJson, getToken, setToken } from "@/api/client";
 
-function mapUser(session: Session | null): User | null {
-  const u = session?.user;
-  if (!u) return null;
-  const meta = u.user_metadata as { username?: string } | undefined;
-  return {
-    id: u.id,
-    email: u.email ?? "",
-    username: meta?.username ?? u.email?.split("@")[0] ?? "用户",
-  };
+interface AuthUserResponse {
+  id: string;
+  username: string;
+  email: string;
+  created_at: string;
+}
+
+interface AuthLoginResponse {
+  token: string;
+  user: AuthUserResponse;
 }
 
 interface AuthState {
   user: User | null;
-  session: Session | null;
+  token: string | null;
   hydrated: boolean;
-  setSession: (session: Session | null) => void;
-  logout: () => Promise<void>;
+  setAuth: (token: string, user: AuthUserResponse) => void;
+  logout: () => void;
   hydrate: () => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
+}
+
+function mapUser(u: AuthUserResponse): User {
+  return {
+    id: u.id,
+    email: u.email,
+    username: u.username,
+  };
 }
 
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
-  session: null,
+  token: null,
   hydrated: false,
-  setSession: (session) => {
-    set({
-      session,
-      user: mapUser(session),
-    });
+  setAuth: (token, u) => {
+    setToken(token);
+    set({ token, user: mapUser(u) });
   },
-  logout: async () => {
-    await supabase.auth.signOut();
-    set({ user: null, session: null });
+  logout: () => {
+    setToken(null);
+    set({ user: null, token: null });
   },
   hydrate: async () => {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-    set({
-      session,
-      user: mapUser(session),
-      hydrated: true,
+    const token = getToken();
+    if (!token) {
+      set({ user: null, token: null, hydrated: true });
+      return;
+    }
+    try {
+      const data = await apiJson<{ user: AuthUserResponse }>("/api/auth/me");
+      set({ token, user: mapUser(data.user), hydrated: true });
+    } catch {
+      setToken(null);
+      set({ user: null, token: null, hydrated: true });
+    }
+  },
+  login: async (username, password) => {
+    const data = await apiJson<AuthLoginResponse>("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
     });
+    setToken(data.token);
+    set({ token: data.token, user: mapUser(data.user) });
+  },
+  register: async (username, password) => {
+    const data = await apiJson<AuthLoginResponse>("/api/auth/register", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    setToken(data.token);
+    set({ token: data.token, user: mapUser(data.user) });
   },
 }));

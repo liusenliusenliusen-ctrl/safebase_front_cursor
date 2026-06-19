@@ -1,8 +1,8 @@
 /// <reference types="vite/client" />
 
 interface ImportMetaEnv {
-  readonly VITE_SUPABASE_URL: string;
-  readonly VITE_SUPABASE_ANON_KEY: string;
+  /** 留空时 dev 走 Vite proxy → http://127.0.0.1:8000 */
+  readonly VITE_API_BASE_URL?: string;
 }
 
 interface ImportMeta {

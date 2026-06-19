@@ -1,9 +1,4 @@
-import { supabase } from "@/lib/supabase";
-
-const functionsBase = () => {
-  const u = import.meta.env.VITE_SUPABASE_URL ?? "";
-  return `${u.replace(/\/$/, "")}/functions/v1`;
-};
+import { apiFetch, getToken } from "@/api/client";
 
 export interface StreamCallbacks {
   onChunk: (text: string) => void;
@@ -11,9 +6,6 @@ export interface StreamCallbacks {
   onError: (err: Error) => void;
 }
 
-/**
- * 调用 Supabase Edge Function，将 OpenAI 流式结果转为与旧后端一致的 `data:` / `event: end` SSE。
- */
 export interface StreamChatOptions {
   userMessageId: string;
 }
@@ -23,22 +15,14 @@ export async function streamChatCompletion(
   options: StreamChatOptions,
   callbacks: StreamCallbacks
 ): Promise<() => void> {
-  const {
-    data: { session },
-  } = await supabase.auth.getSession();
-  if (!session?.access_token) {
+  const token = getToken();
+  if (!token) {
     callbacks.onError(new Error("未登录"));
     return () => {};
   }
 
-  const anon = import.meta.env.VITE_SUPABASE_ANON_KEY ?? "";
-  const res = await fetch(`${functionsBase()}/stream-chat`, {
+  const res = await apiFetch("/api/chat/stream", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${session.access_token}`,
-      apikey: anon,
-    },
     body: JSON.stringify({
       messages,
       user_message_id: Number(options.userMessageId),
@@ -47,9 +31,7 @@ export async function streamChatCompletion(
 
   if (!res.ok) {
     const errBody = await res.text();
-    callbacks.onError(
-      new Error(res.statusText + (errBody ? `: ${errBody}` : ""))
-    );
+    callbacks.onError(new Error(res.statusText + (errBody ? `: ${errBody}` : "")));
     return () => {};
   }
 
@@ -92,8 +74,9 @@ export async function streamChatCompletion(
       }
       endOnce();
     } catch (e) {
-      if (!cancelled && !ended)
+      if (!cancelled && !ended) {
         callbacks.onError(e instanceof Error ? e : new Error(String(e)));
+      }
     }
   })();
 

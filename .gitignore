@@ -6,8 +6,6 @@ dist/
 dist-ssr/
 *.tsbuildinfo
 *.tar.gz
-supabase/functions/*.zip
-supabase/functions/*.code-workspace
 .env.production
 
 # 环境
