@@ -221,11 +221,11 @@ crontab -e
 | 401 登录失败 | `JWT_SECRET` 变更会使旧 token 失效 |
 | 管理后台 401 | `ADMIN_SECRET` 与登录页一致 |
 | 管理后台 500 | `DATABASE_URL` 能否连上 Docker Postgres |
-| 内存不足 | 加 swap；Postgres 单容器比整套 Supabase 轻很多 |
+| 内存不足 | 加 swap；单容器 Postgres 比多组件栈更省内存 |
 
 ## 11. 安全提醒
 
 - 勿将 `.env`、数据库密码提交 Git
 - `JWT_SECRET`、`ADMIN_SECRET`、DB 密码仅服务器持有
 - Postgres 端口不对公网开放；生产使用 HTTPS
-- 从旧 Supabase 迁移需自行导出数据并写入新 `public.users` 结构
+- 从其他旧库迁移需自行导出并写入 `public.users` 等表结构
