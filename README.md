@@ -14,10 +14,15 @@
 ## 本地开发
 
 ```bash
-# 1. 后端仓库：docker compose up -d && npm run dev
+# 1. 后端仓库
+cd safebase_backend_cursor
+docker compose up -d          # Postgres（Docker，:5433）
+cp .env.example .env          # 填 JWT_SECRET、OPENROUTER_API_KEY、ADMIN_SECRET
+npm install && npm run dev    # API :8000
+
 # 2. 本仓库
-cp .env.example .env    # VITE_API_BASE_URL 留空即可（Vite 代理 /api → :8000）
-npm install && npm run dev
+cp .env.example .env          # VITE_API_BASE_URL 留空（Vite 代理 /api → :8000）
+npm install && npm run dev    # :5173
 ```
 
 默认 <http://localhost:5173>。

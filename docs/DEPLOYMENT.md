@@ -24,8 +24,8 @@ backend (:8000)
   ├─ 全部 /api/*
   └─ cron → node dist/scripts/run-tasks.js
 
-Postgres (:5432，仅本机)
-  docker compose（backend 仓库）
+Postgres (宿主机 :5433 → 容器 :5432，仅本机)
+  docker compose（backend 仓库，容器 safebase-postgres）
 ```
 
 推荐主站与 API **同源**：Nginx 反代 `/api`，前端构建时 **不必** 设置 `VITE_API_BASE_URL`。
@@ -36,7 +36,7 @@ Postgres (:5432，仅本机)
 |----|------|
 | 规格 | 2 vCPU + 4 GiB 可跑通；建议 2–4 GiB swap |
 | 系统 | Linux，Docker Compose v2、Node 18+、Nginx、PM2 |
-| 端口 | 80/443（Nginx）；**5432 勿对公网开放** |
+| 端口 | 80/443（Nginx）；**5433/5432 勿对公网开放**（仅本机连 DB） |
 | 出站 | OpenRouter API |
 
 ## 3. 部署数据库
@@ -49,11 +49,13 @@ docker compose up -d
 docker compose ps              # 确认 healthy
 ```
 
-默认连接串（仅本机）：
+默认连接串（仅本机，与 `docker-compose.yml` 端口映射一致）：
 
 ```text
-postgresql://postgres:postgres@127.0.0.1:5432/safebase
+postgresql://postgres:postgres@127.0.0.1:5433/safebase
 ```
+
+若生产机无本机 Postgres 占用 5432，可将 `docker-compose.yml` 改为 `"5432:5432"` 并同步 `.env` 中的 `DATABASE_URL`。
 
 **生产务必修改** `docker-compose.yml` 中的 `POSTGRES_PASSWORD`，并同步 `backend/.env` 的 `DATABASE_URL`。
 
@@ -64,7 +66,7 @@ postgresql://postgres:postgres@127.0.0.1:5432/safebase
 `/opt/safebase/backend/.env`：
 
 ```env
-DATABASE_URL=postgresql://postgres:你的密码@127.0.0.1:5432/safebase
+DATABASE_URL=postgresql://postgres:你的密码@127.0.0.1:5433/safebase
 JWT_SECRET=随机长字符串至少32字符
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-large
@@ -220,7 +222,8 @@ crontab -e
 | 流式中断 | Nginx 需 `proxy_buffering off` |
 | 401 登录失败 | `JWT_SECRET` 变更会使旧 token 失效 |
 | 管理后台 401 | `ADMIN_SECRET` 与登录页一致 |
-| 管理后台 500 | `DATABASE_URL` 能否连上 Docker Postgres |
+| 管理后台 500 | `DATABASE_URL` 端口是否与 `docker-compose.yml` 映射一致（默认 5433） |
+| 注册 500 / `role "postgres" does not exist` | 后端连到了错误 Postgres；确认 `DATABASE_URL` 指向 Docker 而非本机 5432 |
 | 内存不足 | 加 swap；单容器 Postgres 比多组件栈更省内存 |
 
 ## 11. 安全提醒
