@@ -9,7 +9,7 @@
 | [safebase_admin_cursor](../safebase_admin_cursor) | 管理后台（:5174） |
 
 **开发指南：** [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)  
-**生产部署：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)
+**生产部署：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)（含从本地上传、Nginx、PM2）
 
 ## 本地开发
 

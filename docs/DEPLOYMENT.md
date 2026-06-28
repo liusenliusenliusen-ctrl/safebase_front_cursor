@@ -14,9 +14,9 @@
 
 ```text
 用户浏览器
-  ├─ http://服务器IP/           → Nginx → /opt/safebase/front/dist
+  ├─ http://服务器IP/           → Nginx → /opt/safebase/front
   │     /api/*                  → proxy → 127.0.0.1:8000（backend）
-  ├─ http://服务器IP:8081/      → Nginx → /opt/safebase/admin/dist
+  ├─ http://服务器IP:8081/      → Nginx → /opt/safebase/admin
   │     /api/*                  → proxy → 127.0.0.1:8000
   └─ 对话流式 SSE               → 同上 /api/chat/stream（proxy_buffering off）
 
@@ -25,7 +25,7 @@ backend (:8000)
   └─ cron → node dist/scripts/run-tasks.js
 
 Postgres (宿主机 :5433 → 容器 :5432，仅本机)
-  docker compose（backend 仓库，容器 safebase-postgres）
+  docker compose（backend 目录，容器 safebase-postgres）
 ```
 
 推荐主站与 API **同源**：Nginx 反代 `/api`，前端构建时 **不必** 设置 `VITE_API_BASE_URL`。
@@ -41,10 +41,10 @@ Postgres (宿主机 :5433 → 容器 :5432，仅本机)
 
 ## 3. 部署数据库
 
-在服务器 `safebase_backend_cursor`：
+在服务器 backend 目录（含 `docker-compose.yml` 与 `sql/`）：
 
 ```bash
-cd /opt/safebase/backend-src   # 或你 clone 的路径
+cd /opt/safebase/backend
 docker compose up -d
 docker compose ps              # 确认 healthy
 ```
@@ -63,7 +63,9 @@ postgresql://postgres:postgres@127.0.0.1:5433/safebase
 
 ## 4. 配置后端
 
-`/opt/safebase/backend/.env`：
+`.env` 放在 **`/opt/safebase/backend/.env`**（与 `package.json` 同级，**不要**提交 Git）。PM2 启动 `dist/src/index.js` 时会自动读取该文件。
+
+`/opt/safebase/backend/.env` 示例：
 
 ```env
 DATABASE_URL=postgresql://postgres:你的密码@127.0.0.1:5433/safebase
@@ -89,11 +91,20 @@ pm2 save && pm2 startup
 ```bash
 curl http://127.0.0.1:8000/api/health
 curl http://127.0.0.1:8000/api/admin/users -H "X-Admin-Key: 你的ADMIN_SECRET"
+
+# 注册接口（应返回 token，而非 500）
+curl -X POST http://127.0.0.1:8000/api/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"testuser","password":"testpass123"}'
 ```
+
+排错：`pm2 logs safebase-backend --lines 50`
 
 ## 5. 构建与上传应用
 
-在开发机三个仓库父目录：
+**服务器无法稳定访问 GitHub 时**，在本地 Mac build 后 `scp` 上传即可（无需在服务器 clone）。
+
+在开发机三个仓库分别执行：
 
 ### 5.1 主站
 
@@ -101,7 +112,7 @@ curl http://127.0.0.1:8000/api/admin/users -H "X-Admin-Key: 你的ADMIN_SECRET"
 cd safebase_front_cursor
 npm ci && npm run build
 # VITE_API_BASE_URL 留空（依赖 Nginx /api 反代）
-tar czf front.tar.gz -C safebase_front_cursor dist
+tar czf /tmp/front.tar.gz -C dist .
 ```
 
 ### 5.2 管理后台
@@ -109,7 +120,7 @@ tar czf front.tar.gz -C safebase_front_cursor dist
 ```bash
 cd safebase_admin_cursor
 npm ci && npm run build
-tar czf admin.tar.gz -C safebase_admin_cursor dist
+tar czf /tmp/admin.tar.gz -C dist .
 ```
 
 ### 5.3 后端
@@ -117,27 +128,40 @@ tar czf admin.tar.gz -C safebase_admin_cursor dist
 ```bash
 cd safebase_backend_cursor
 npm ci && npm run build
-tar czf backend.tar.gz -C safebase_backend_cursor \
+tar czf /tmp/backend.tar.gz \
   package.json package-lock.json dist prompts sql docker-compose.yml scripts/cron.example
 ```
 
 ### 5.4 上传
 
 ```bash
-scp front.tar.gz admin.tar.gz backend.tar.gz user@服务器:/opt/safebase/
-scp safebase_backend_cursor/.env user@服务器:/opt/safebase/backend.env
+SERVER=user@你的服务器IP
+
+scp /tmp/front.tar.gz /tmp/admin.tar.gz /tmp/backend.tar.gz $SERVER:/tmp/
+scp safebase_backend_cursor/.env.production $SERVER:/tmp/backend.env
+# 若无 .env.production，用本地填好的 .env，切勿提交 Git
 ```
 
 服务器解压：
 
 ```bash
 sudo mkdir -p /opt/safebase/{front,admin,backend}
+sudo chown -R $USER:$USER /opt/safebase
+
 cd /opt/safebase
-tar xzf front.tar.gz -C front
-tar xzf admin.tar.gz -C admin
-tar xzf backend.tar.gz -C backend
-mv backend.env backend/.env
+rm -rf front/* admin/*
+tar xzf /tmp/front.tar.gz -C front
+tar xzf /tmp/admin.tar.gz -C admin
+tar xzf /tmp/backend.tar.gz -C backend
+mv /tmp/backend.env backend/.env
+
+# 确认静态资源完整（缺 assets 会导致浏览器白屏）
+ls /opt/safebase/front/index.html /opt/safebase/front/assets/
+
 cd backend && npm ci --omit=dev
+docker compose up -d
+pm2 start dist/src/index.js --name safebase-backend || pm2 restart safebase-backend
+pm2 save
 ```
 
 ## 6. Nginx
@@ -147,7 +171,7 @@ cat > /etc/nginx/conf.d/safebase.conf <<'EOF'
 server {
     listen 80;
     server_name _;
-    root /opt/safebase/front/dist;
+    root /opt/safebase/front;
     index index.html;
 
     location /api/ {
@@ -167,7 +191,7 @@ server {
 server {
     listen 8081;
     server_name _;
-    root /opt/safebase/admin/dist;
+    root /opt/safebase/admin;
     index index.html;
 
     location /api/ {
@@ -202,28 +226,33 @@ crontab -e
 
 | 检查 | 操作 |
 |------|------|
-| Postgres | `docker compose ps` healthy |
-| API | `curl /api/health` → `{"ok":true}` |
+| Postgres | `cd /opt/safebase/backend && docker compose ps` healthy |
+| API | `curl http://127.0.0.1:8000/api/health` → `{"ok":true}` |
+| 注册 | `curl -X POST .../api/auth/register` 返回 `token` |
 | 主站 | 浏览器注册、登录、发消息有流式回复 |
 | 管理后台 | `http://IP:8081/` + `ADMIN_SECRET` 能看到用户 |
+| 日志 | `pm2 logs safebase-backend`；Nginx：`/var/log/nginx/error.log` |
 
 ## 9. 更新发布
 
 1. Schema 变更：执行新 SQL 或重建 DB volume（会丢数据）
-2. 后端：`npm run build` → 上传 → `pm2 restart safebase-backend`
-3. 前端：重新 `npm run build` → 覆盖 `front/dist`、`admin/dist`
+2. 后端：本地 `npm run build` → 上传 backend.tar.gz → `npm ci --omit=dev` → `pm2 restart safebase-backend`
+3. 前端：重新 build → 上传并覆盖 `front/`、`admin/` 目录内容
 4. `nginx -t && systemctl reload nginx`
 
 ## 10. 常见问题
 
 | 现象 | 处理 |
 |------|------|
-| 对话无回复 / 502 | 检查 `OPENROUTER_API_KEY`、backend 日志 |
+| 对话无回复 / 502 | 检查 `OPENROUTER_API_KEY`；`pm2 logs safebase-backend` |
 | 流式中断 | Nginx 需 `proxy_buffering off` |
 | 401 登录失败 | `JWT_SECRET` 变更会使旧 token 失效 |
-| 管理后台 401 | `ADMIN_SECRET` 与登录页一致 |
+| 管理后台 401 | `ADMIN_SECRET` 与登录页、`X-Admin-Key` 完全一致 |
+| 注册/管理 500 / `JWT_SECRET is not configured` | `.env` 须在 `/opt/safebase/backend/.env`；更新 backend 至最新（自动读根目录 `.env`） |
 | 管理后台 500 | `DATABASE_URL` 端口是否与 `docker-compose.yml` 映射一致（默认 5433） |
 | 注册 500 / `role "postgres" does not exist` | 后端连到了错误 Postgres；确认 `DATABASE_URL` 指向 Docker 而非本机 5432 |
+| 主站白屏 | `ls /opt/safebase/front/assets/` 是否存在；Nginx `root` 须为 `/opt/safebase/front` |
+| Nginx `redirection cycle` | `root` 与解压目录不一致；确认 `index.html` 在 `root` 下 |
 | 内存不足 | 加 swap；单容器 Postgres 比多组件栈更省内存 |
 
 ## 11. 安全提醒
