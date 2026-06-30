@@ -261,3 +261,4 @@ crontab -e
 - `JWT_SECRET`、`ADMIN_SECRET`、DB 密码仅服务器持有
 - Postgres 端口不对公网开放；生产使用 HTTPS
 - 从其他旧库迁移需自行导出并写入 `public.users` 等表结构
+- 用户数据访问控制分阶段演进（Admin 不看正文、DB 仅 backend 账号等）见 **[SECURITY_EVOLUTION.md](./SECURITY_EVOLUTION.md)**

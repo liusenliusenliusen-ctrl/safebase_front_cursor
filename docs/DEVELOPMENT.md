@@ -201,6 +201,10 @@ safebase_admin_cursor/
 
 见 **[DEPLOYMENT.md](./DEPLOYMENT.md)**。
 
+## 数据访问与隐私演进
+
+用户敏感数据的访问控制分阶段计划（明文库 + 严格 DB 权限 + 管理端不看正文 → 可选客户端加密）见 **[SECURITY_EVOLUTION.md](./SECURITY_EVOLUTION.md)**。Prompt 调试期可不实施，上线前建议至少完成阶段 1–2 检查清单。
+
 ## 常见问题
 
 | 现象 | 处理 |
