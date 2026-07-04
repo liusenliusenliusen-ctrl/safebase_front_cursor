@@ -26,6 +26,7 @@ interface ChatState {
 
 let cancelStream: (() => void) | null = null;
 let streamFinished = false;
+let stoppedByUser = false;
 
 export const useChatStore = create<ChatState>((set, get) => ({
   sending: false,
@@ -46,6 +47,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     if (!plain || get().sending) return null;
 
     streamFinished = false;
+    stoppedByUser = false;
     set({
       lastSentText: plain,
       draft: "",
@@ -85,7 +87,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     };
 
     try {
-      const stop = await streamChatCompletion(
+      const stop = streamChatCompletion(
         [{ role: "user", content: plain }],
         { userMessageId: userMsg.id },
         {
@@ -99,6 +101,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             finishStream();
           },
           onError: (err) => {
+            if (stoppedByUser) return;
             streamFinished = true;
             cancelStream = null;
             set({
@@ -130,6 +133,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   stopMessage: async (userId) => {
+    stoppedByUser = true;
     cancelStream?.();
     cancelStream = null;
     streamFinished = true;
@@ -141,6 +145,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       waitingForAssistant: false,
       draft: text,
       optimisticUserMsgId: null,
+      errorMessage: null,
     });
 
     if (userId) {

@@ -10,41 +10,31 @@ export interface StreamChatOptions {
   userMessageId: string;
 }
 
-export async function streamChatCompletion(
+function isAbortError(e: unknown): boolean {
+  return (
+    (e instanceof DOMException && e.name === "AbortError") ||
+    (e instanceof Error && e.name === "AbortError")
+  );
+}
+
+/**
+ * 启动流式对话。立即返回 cancel；可在 fetch 完成前 abort（例如用户点「停止」）。
+ */
+export function streamChatCompletion(
   messages: { role: string; content: string }[],
   options: StreamChatOptions,
   callbacks: StreamCallbacks
-): Promise<() => void> {
+): () => void {
   const token = getToken();
   if (!token) {
     callbacks.onError(new Error("未登录"));
     return () => {};
   }
 
-  const res = await apiFetch("/api/chat/stream", {
-    method: "POST",
-    body: JSON.stringify({
-      messages,
-      user_message_id: Number(options.userMessageId),
-    }),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text();
-    callbacks.onError(new Error(res.statusText + (errBody ? `: ${errBody}` : "")));
-    return () => {};
-  }
-
-  const reader = res.body?.getReader();
-  if (!reader) {
-    callbacks.onError(new Error("No response body"));
-    return () => {};
-  }
-
-  const decoder = new TextDecoder();
+  const controller = new AbortController();
   let cancelled = false;
   let ended = false;
-  let buffer = "";
+  let reader: ReadableStreamDefaultReader<Uint8Array> | null = null;
 
   const endOnce = () => {
     if (ended || cancelled) return;
@@ -52,8 +42,46 @@ export async function streamChatCompletion(
     callbacks.onEnd();
   };
 
-  (async () => {
+  const cancel = () => {
+    cancelled = true;
+    controller.abort();
+    void reader?.cancel().catch(() => {});
+  };
+
+  void (async () => {
     try {
+      const res = await apiFetch("/api/chat/stream", {
+        method: "POST",
+        signal: controller.signal,
+        body: JSON.stringify({
+          messages,
+          user_message_id: Number(options.userMessageId),
+        }),
+      });
+
+      if (cancelled) return;
+
+      if (res.status === 499) {
+        return;
+      }
+
+      if (!res.ok) {
+        const errBody = await res.text();
+        callbacks.onError(
+          new Error(res.statusText + (errBody ? `: ${errBody}` : ""))
+        );
+        return;
+      }
+
+      reader = res.body?.getReader() ?? null;
+      if (!reader) {
+        callbacks.onError(new Error("No response body"));
+        return;
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+
       while (!cancelled) {
         const { done, value } = await reader.read();
         if (done) break;
@@ -74,14 +102,10 @@ export async function streamChatCompletion(
       }
       endOnce();
     } catch (e) {
-      if (!cancelled && !ended) {
-        callbacks.onError(e instanceof Error ? e : new Error(String(e)));
-      }
+      if (cancelled || isAbortError(e) || ended) return;
+      callbacks.onError(e instanceof Error ? e : new Error(String(e)));
     }
   })();
 
-  return () => {
-    cancelled = true;
-    reader.cancel();
-  };
+  return cancel;
 }
