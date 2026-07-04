@@ -13,6 +13,8 @@ interface MessageListProps {
    * 完成后由 MessageBubble + Markdown 一次性渲染，此处不再使用 Markdown。
    */
   streamingContent?: string;
+  /** 用户消息已显示，等待模型首 token */
+  waitingForAssistant?: boolean;
   onLoadMore?: () => void;
   hasMore?: boolean;
 }
@@ -22,6 +24,7 @@ export function MessageList({
   loading,
   loadingMore,
   streamingContent,
+  waitingForAssistant,
   onLoadMore,
   hasMore,
 }: MessageListProps) {
@@ -62,7 +65,7 @@ export function MessageList({
   useEffect(() => {
     if (!listRef.current) return;
     listRef.current.scrollTop = listRef.current.scrollHeight;
-  }, [messages.length, streamingContent]);
+  }, [messages.length, streamingContent, waitingForAssistant]);
 
   if (loading) {
     return (
@@ -108,7 +111,7 @@ export function MessageList({
           <MessageBubble key={msg.id} message={msg} showDate={showDate} />
         );
       })}
-      {streamingContent !== undefined && (
+      {(waitingForAssistant || streamingContent !== undefined) && (
         <div
           style={{
             display: "flex",
@@ -130,20 +133,24 @@ export function MessageList({
               wordBreak: "break-word",
             }}
           >
-            {streamingContent || "正在思考…"}
-            <span
-              className="stream-cursor"
-              aria-hidden
-              style={{
-                display: "inline-block",
-                width: 2,
-                height: "1em",
-                background: "var(--accent)",
-                marginLeft: 2,
-                animation: "blink 1s step-end infinite",
-                verticalAlign: "text-bottom",
-              }}
-            />
+            {waitingForAssistant && !streamingContent
+              ? "正在思考…"
+              : streamingContent}
+            {(waitingForAssistant || streamingContent !== undefined) && (
+              <span
+                className="stream-cursor"
+                aria-hidden
+                style={{
+                  display: "inline-block",
+                  width: 2,
+                  height: "1em",
+                  background: "var(--accent)",
+                  marginLeft: 2,
+                  animation: "blink 1s step-end infinite",
+                  verticalAlign: "text-bottom",
+                }}
+              />
+            )}
           </div>
         </div>
       )}

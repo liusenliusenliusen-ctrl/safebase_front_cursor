@@ -22,6 +22,7 @@ export function ChatPage() {
     draft,
     sending,
     streamingContent,
+    waitingForAssistant,
     optimisticUserMsgId,
     needsSync,
     errorMessage,
@@ -101,16 +102,40 @@ export function ChatPage() {
   const handleSend = useCallback(
     async (text: string) => {
       if (!user) return;
+      const plain = text.trim();
+      if (!plain) return;
+
+      const optimisticId = `optimistic-${Date.now()}`;
+      const optimisticMsg: Message = {
+        id: optimisticId,
+        role: "user",
+        content: plain,
+        created_at: new Date().toISOString(),
+      };
+      setMessages((prev) =>
+        [...prev, optimisticMsg].sort(
+          (a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        )
+      );
+
       try {
-        const userMsg = await sendChatMessage(user.id, text);
-        if (!userMsg) return;
+        const userMsg = await sendChatMessage(user.id, plain);
+        if (!userMsg) {
+          setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
+          return;
+        }
         setMessages((prev) =>
-          [...prev, userMsg].sort(
-            (a, b) =>
-              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          )
+          prev
+            .map((m) => (m.id === optimisticId ? userMsg : m))
+            .sort(
+              (a, b) =>
+                new Date(a.created_at).getTime() -
+                new Date(b.created_at).getTime()
+            )
         );
       } catch (e) {
+        setMessages((prev) => prev.filter((m) => m.id !== optimisticId));
         message.error(e instanceof Error ? e.message : "发送失败");
       }
     },
@@ -119,7 +144,13 @@ export function ChatPage() {
 
   const handleStop = useCallback(() => {
     if (optimisticUserMsgId != null) {
-      setMessages((prev) => prev.filter((m) => m.id !== optimisticUserMsgId));
+      setMessages((prev) =>
+        prev.filter(
+          (m) =>
+            m.id !== optimisticUserMsgId &&
+            !m.id.startsWith("optimistic-")
+        )
+      );
     }
     void stopMessage(user?.id);
   }, [optimisticUserMsgId, stopMessage, user?.id]);
@@ -143,6 +174,7 @@ export function ChatPage() {
         hasMore={hasMore}
         onLoadMore={loadMore}
         streamingContent={streamingContent}
+        waitingForAssistant={waitingForAssistant}
       />
       <ChatInput
         value={draft}

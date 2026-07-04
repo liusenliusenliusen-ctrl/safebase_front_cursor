@@ -104,65 +104,73 @@ curl -X POST http://127.0.0.1:8000/api/auth/register \
 
 **服务器无法稳定访问 GitHub 时**，在本地 Mac build 后 `scp` 上传即可（无需在服务器 clone）。
 
-在开发机三个仓库分别执行：
+### 5.0 一键部署（推荐，需本机 SSH 密钥已配置）
 
-### 5.1 主站
+三个仓库的父目录下，在 **safebase_front_cursor** 执行：
+
+```bash
+# 可选：export DEPLOY_SERVER=root@你的服务器IP
+bash scripts/deploy-upload.sh
+```
+
+脚本会：build 三端 → `COPYFILE_DISABLE=1` 打包（避免 Linux 解压 xattr 警告）→ `scp` → 远程执行 `scripts/deploy-server.sh`。
+
+**首次部署**须先把 `.env` 放到服务器（部署包不含密钥）：
+
+```bash
+scp safebase_backend_cursor/.env root@你的服务器IP:/opt/safebase/backend/.env
+ssh root@你的服务器IP 'chmod 600 /opt/safebase/backend/.env'
+```
+
+之后每次部署，`deploy-server.sh` 会**自动备份并恢复**已有 `/opt/safebase/backend/.env`；若缺失则报错退出。
+
+仅更新 `.env` 时：
+
+```bash
+scp safebase_backend_cursor/.env root@你的服务器IP:/opt/safebase/backend/.env
+ssh root@你的服务器IP 'pm2 restart safebase-backend --update-env'
+```
+
+### 5.1 手动分步（与脚本等价）
+
+#### 主站
 
 ```bash
 cd safebase_front_cursor
 npm ci && npm run build
-# VITE_API_BASE_URL 留空（依赖 Nginx /api 反代）
-tar czf /tmp/front.tar.gz -C dist .
+COPYFILE_DISABLE=1 tar czf /tmp/front.tar.gz -C dist .
 ```
 
-### 5.2 管理后台
+#### 管理后台
 
 ```bash
 cd safebase_admin_cursor
 npm ci && npm run build
-tar czf /tmp/admin.tar.gz -C dist .
+COPYFILE_DISABLE=1 tar czf /tmp/admin.tar.gz -C dist .
 ```
 
-### 5.3 后端
+#### 后端
 
 ```bash
 cd safebase_backend_cursor
 npm ci && npm run build
-tar czf /tmp/backend.tar.gz \
+COPYFILE_DISABLE=1 tar czf /tmp/backend.tar.gz \
   package.json package-lock.json dist prompts sql docker-compose.yml scripts/cron.example
 ```
 
-### 5.4 上传
+#### 上传并在服务器部署
 
 ```bash
-SERVER=user@你的服务器IP
+SERVER=root@你的服务器IP
 
-scp /tmp/front.tar.gz /tmp/admin.tar.gz /tmp/backend.tar.gz $SERVER:/tmp/
-scp safebase_backend_cursor/.env.production $SERVER:/tmp/backend.env
-# 若无 .env.production，用本地填好的 .env，切勿提交 Git
+scp /tmp/front.tar.gz /tmp/admin.tar.gz /tmp/backend.tar.gz \
+  safebase_front_cursor/scripts/deploy-server.sh \
+  $SERVER:/tmp/
+
+ssh $SERVER 'chmod +x /tmp/deploy-server.sh && bash /tmp/deploy-server.sh'
 ```
 
-服务器解压：
-
-```bash
-sudo mkdir -p /opt/safebase/{front,admin,backend}
-sudo chown -R $USER:$USER /opt/safebase
-
-cd /opt/safebase
-rm -rf front/* admin/*
-tar xzf /tmp/front.tar.gz -C front
-tar xzf /tmp/admin.tar.gz -C admin
-tar xzf /tmp/backend.tar.gz -C backend
-mv /tmp/backend.env backend/.env
-
-# 确认静态资源完整（缺 assets 会导致浏览器白屏）
-ls /opt/safebase/front/index.html /opt/safebase/front/assets/
-
-cd backend && npm ci --omit=dev
-docker compose up -d
-pm2 start dist/src/index.js --name safebase-backend || pm2 restart safebase-backend
-pm2 save
-```
+`deploy-server.sh` 会解压到 `/opt/safebase/{front,admin,backend}`、启动 Docker、`npm ci`、`pm2 restart`、检查 health 并重载 Nginx。
 
 ## 6. Nginx
 
@@ -248,7 +256,8 @@ crontab -e
 | 流式中断 | Nginx 需 `proxy_buffering off` |
 | 401 登录失败 | `JWT_SECRET` 变更会使旧 token 失效 |
 | 管理后台 401 | `ADMIN_SECRET` 与登录页、`X-Admin-Key` 完全一致 |
-| 注册/管理 500 / `JWT_SECRET is not configured` | `.env` 须在 `/opt/safebase/backend/.env`；更新 backend 至最新（自动读根目录 `.env`） |
+| 注册/管理 500 / `JWT_SECRET is not configured` | `.env` 须在 `/opt/safebase/backend/.env`；首次部署需 `scp` 上传；更新后用 `pm2 restart --update-env` |
+| Mac 打包 Linux 解压 `LIBARCHIVE.xattr` 警告 | 无害；打包时加 `COPYFILE_DISABLE=1`（见 `scripts/deploy-upload.sh`） |
 | 管理后台 500 | `DATABASE_URL` 端口是否与 `docker-compose.yml` 映射一致（默认 5433） |
 | 注册 500 / `role "postgres" does not exist` | 后端连到了错误 Postgres；确认 `DATABASE_URL` 指向 Docker 而非本机 5432 |
 | 主站白屏 | `ls /opt/safebase/front/assets/` 是否存在；Nginx `root` 须为 `/opt/safebase/front` |

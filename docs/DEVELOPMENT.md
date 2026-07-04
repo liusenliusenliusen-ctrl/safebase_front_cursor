@@ -219,6 +219,8 @@ safebase_admin_cursor/
 | 迁移不生效 | 删 volume 重建：`docker compose down -v && docker compose up -d`（会清空数据） |
 | CORS | 后端已 `cors: origin: true`；生产用 Nginx 同源反代 `/api` 更佳 |
 
+调试对话 prompt：后端 `npm run dev` 终端在每次 `/api/chat/stream` 时打印 `chat stream: model and prompt`（含完整 prompt）；生产用 `pm2 logs safebase-backend`。
+
 ---
 
 *Schema 以 `safebase_backend_cursor/sql/migrations/` 为准。*

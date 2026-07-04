@@ -7,6 +7,8 @@ interface ChatState {
   sending: boolean;
   draft: string;
   streamingContent: string | undefined;
+  /** true after用户消息已入库、等待模型首 token */
+  waitingForAssistant: boolean;
   lastSentText: string;
   optimisticUserMsgId: string | null;
   needsSync: boolean;
@@ -29,6 +31,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
   sending: false,
   draft: "",
   streamingContent: undefined,
+  waitingForAssistant: false,
   lastSentText: "",
   optimisticUserMsgId: null,
   needsSync: false,
@@ -47,7 +50,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
       lastSentText: plain,
       draft: "",
       sending: true,
-      streamingContent: "",
+      streamingContent: undefined,
+      waitingForAssistant: false,
       needsSync: false,
       errorMessage: null,
     });
@@ -59,12 +63,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({
         sending: false,
         streamingContent: undefined,
+        waitingForAssistant: false,
         errorMessage: err instanceof Error ? err.message : "发送失败",
       });
       return null;
     }
 
-    set({ optimisticUserMsgId: userMsg.id });
+    set({ optimisticUserMsgId: userMsg.id, waitingForAssistant: true });
 
     const finishStream = () => {
       if (streamFinished) return;
@@ -73,6 +78,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({
         sending: false,
         streamingContent: undefined,
+        waitingForAssistant: false,
         optimisticUserMsgId: null,
         needsSync: true,
       });
@@ -85,6 +91,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
         {
           onChunk: (chunk) => {
             set((state) => ({
+              waitingForAssistant: false,
               streamingContent: (state.streamingContent ?? "") + chunk,
             }));
           },
@@ -97,6 +104,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
             set({
               sending: false,
               streamingContent: undefined,
+              waitingForAssistant: false,
               optimisticUserMsgId: null,
               errorMessage: err.message || "对话失败",
               needsSync: true,
@@ -111,6 +119,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       set({
         sending: false,
         streamingContent: undefined,
+        waitingForAssistant: false,
         optimisticUserMsgId: null,
         errorMessage: err instanceof Error ? err.message : "对话失败",
         needsSync: true,
@@ -129,6 +138,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({
       sending: false,
       streamingContent: undefined,
+      waitingForAssistant: false,
       draft: text,
       optimisticUserMsgId: null,
     });
