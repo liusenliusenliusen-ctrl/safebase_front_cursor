@@ -205,6 +205,41 @@ safebase_admin_cursor/
 
 用户敏感数据的访问控制分阶段计划（明文库 + 严格 DB 权限 + 管理端不看正文 → 可选客户端加密）见 **[SECURITY_EVOLUTION.md](./SECURITY_EVOLUTION.md)**。Prompt 调试期可不实施，上线前建议至少完成阶段 1–2 检查清单。
 
+## E2E 自动化（Playwright）
+
+浏览器端到端测试，覆盖注册、对话、写日记。**本地**运行，默认 `http://localhost:5173`（Vite 代理 `/api` → 后端）。
+
+### 前置（须先启动）
+
+```bash
+# 终端 1：数据库 + 后端（含 JWT_SECRET、OPENROUTER_API_KEY）
+cd safebase_backend_cursor
+docker compose up -d
+npm run dev
+
+# 终端 2：E2E（会自动起前端 dev，或复用已有 :5173）
+cd safebase_front_cursor
+npm install
+npx playwright install chromium   # 首次
+npm run test:e2e
+```
+
+| 命令 | 说明 |
+|------|------|
+| `npm run test:e2e` | 无头运行全部 E2E |
+| `npm run test:e2e:headed` | 有界面，便于调试 |
+| `npm run test:e2e:ui` | Playwright UI 模式 |
+| `npm run test:e2e:report` | 查看上次 HTML 报告 |
+
+用例位于 `e2e/`：`auth.spec.ts`（注册/登录）、`chat.spec.ts`（发消息 + 助手回复，需 OpenRouter）、`diary.spec.ts`（写日记）。
+
+环境变量（可选）：
+
+| 变量 | 默认 | 说明 |
+|------|------|------|
+| `E2E_BASE_URL` | `http://localhost:5173` | 主站地址 |
+| `E2E_BACKEND_URL` | `http://127.0.0.1:8000` | global-setup 健康检查 |
+
 ## 常见问题
 
 | 现象 | 处理 |
