@@ -557,4 +557,4 @@
 
 ---
 
-*由 `scripts/seed-cptsd-users.mjs` 生成模拟数据；本文档可用 `node scripts/export-dialogues.mjs` 重新导出。*
+*由 `scripts/seed-trauma-users.mjs` 生成模拟数据；本文档可用 `node scripts/export-dialogues.mjs` 重新导出。*

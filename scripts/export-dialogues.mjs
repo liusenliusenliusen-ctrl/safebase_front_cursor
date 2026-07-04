@@ -97,7 +97,7 @@ async function main() {
     md += "\n---\n\n";
   }
 
-  md += `*由 \`scripts/seed-cptsd-users.mjs\` 生成模拟数据；重新导出：\`node scripts/export-dialogues.mjs\`*\n`;
+  md += `*由 \`scripts/seed-trauma-users.mjs\` 生成模拟数据；重新导出：\`node scripts/export-dialogues.mjs\`*\n`;
 
   writeFileSync(OUT, md, "utf8");
   console.log(`已写入 ${OUT}（${md.length} 字符）`);

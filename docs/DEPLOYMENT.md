@@ -25,7 +25,7 @@ backend (:8000)
   └─ cron → node dist/scripts/run-tasks.js
 
 Postgres (宿主机 :5433 → 容器 :5432，仅本机)
-  docker compose（backend 目录，容器 safebase-postgres）
+  docker compose（backend 目录，容器 trauma-heal-postgres）
 ```
 
 推荐主站与 API **同源**：Nginx 反代 `/api`，前端构建时 **不必** 设置 `VITE_API_BASE_URL`。
@@ -52,7 +52,7 @@ docker compose ps              # 确认 healthy
 默认连接串（仅本机，与 `docker-compose.yml` 端口映射一致）：
 
 ```text
-postgresql://postgres:postgres@127.0.0.1:5433/safebase
+postgresql://postgres:postgres@127.0.0.1:5433/trauma_heal
 ```
 
 若生产机无本机 Postgres 占用 5432，可将 `docker-compose.yml` 改为 `"5432:5432"` 并同步 `.env` 中的 `DATABASE_URL`。
@@ -68,7 +68,7 @@ postgresql://postgres:postgres@127.0.0.1:5433/safebase
 `/opt/safebase/backend/.env` 示例：
 
 ```env
-DATABASE_URL=postgresql://postgres:你的密码@127.0.0.1:5433/safebase
+DATABASE_URL=postgresql://postgres:你的密码@127.0.0.1:5433/trauma_heal
 JWT_SECRET=随机长字符串至少32字符
 OPENROUTER_API_KEY=sk-or-v1-...
 OPENROUTER_EMBEDDING_MODEL=openai/text-embedding-3-large

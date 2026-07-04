@@ -83,7 +83,7 @@ export function AuthPage() {
             color: "#333",
           }}
         >
-          CPTSD 疗愈伴侣
+          创伤疗愈伴侣
         </h1>
         <p
           style={{

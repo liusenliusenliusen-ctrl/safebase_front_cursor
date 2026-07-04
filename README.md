@@ -1,6 +1,6 @@
-# CPTSD 疗愈伴侣 · 主站（React）
+# 创伤疗愈伴侣 · 主站（React）
 
-面向幸存者的陪伴产品主站前端：注册/登录、单会话对话、日记。数据与推理由 [safebase_backend_cursor](../safebase_backend_cursor) 的 Fastify API + Postgres 提供。
+面向有创伤经历、正在自我疗愈的群体的陪伴产品主站：注册/登录、单会话对话、日记。定位宽于 CPTSD 诊断标签——未确诊但同样痛苦的幸存者也在服务范围内。数据与推理由 [safebase_backend_cursor](../safebase_backend_cursor) 的 Fastify API + Postgres 提供。
 
 | 仓库 | 职责 |
 |------|------|

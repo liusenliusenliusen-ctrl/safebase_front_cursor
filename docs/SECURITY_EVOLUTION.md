@@ -112,19 +112,19 @@ curl -H "X-Admin-Key: ..." http://127.0.0.1:8000/api/admin/users/<uuid>
 
 #### 2.2 数据库账号（推荐单独 migration）
 
-- [ ] 创建角色 `safebase_app`（非 `SUPERUSER`）
+- [ ] 创建角色 `trauma_heal_app`（非 `SUPERUSER`）
 - [ ] 仅授予业务表 `SELECT, INSERT, UPDATE, DELETE`（及 `USAGE` on schema、`SEQUENCE` 若需要）
 - [ ] 撤销 PUBLIC 默认权限；`postgres` 超级用户 **不** 写入 backend `.env`
-- [ ] `DATABASE_URL=postgresql://safebase_app:强密码@127.0.0.1:5433/safebase`
+- [ ] `DATABASE_URL=postgresql://trauma_heal_app:强密码@127.0.0.1:5433/trauma_heal`
 
 示例（后续实现时可放入 `sql/migrations/002_app_role.sql`）：
 
 ```sql
 -- 示意，实施前在 staging 验证
--- CREATE ROLE safebase_app LOGIN PASSWORD '...';
--- GRANT CONNECT ON DATABASE safebase TO safebase_app;
--- GRANT USAGE ON SCHEMA public TO safebase_app;
--- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO safebase_app;
+-- CREATE ROLE trauma_heal_app LOGIN PASSWORD '...';
+-- GRANT CONNECT ON DATABASE trauma_heal TO trauma_heal_app;
+-- GRANT USAGE ON SCHEMA public TO trauma_heal_app;
+-- GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO trauma_heal_app;
 -- ALTER DEFAULT PRIVILEGES ... 
 ```
 
@@ -231,7 +231,7 @@ curl http://127.0.0.1:8000/api/health
 
 ### 数据库
 
-- [ ] backend 使用 `safebase_app`（或等价）非 superuser 账号
+- [ ] backend 使用 `trauma_heal_app`（或等价）非 superuser 账号
 - [ ] 生产 `POSTGRES_PASSWORD` / `DATABASE_URL` 已换强密码
 - [ ] 无人将生产 `DATABASE_URL` 存放在笔记本 `.env` 或 Git
 
