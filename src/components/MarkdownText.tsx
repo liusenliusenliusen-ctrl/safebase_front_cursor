@@ -7,53 +7,30 @@ interface MarkdownTextProps {
 
 export function MarkdownText({ content }: MarkdownTextProps) {
   return (
-    <div style={{ lineHeight: 1.7 }}>
+    <div className="md-body">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
-          p: ({ children }) => <p style={{ margin: "0 0 8px" }}>{children}</p>,
-          ul: ({ children }) => <ul style={{ margin: "0 0 8px 18px", padding: 0 }}>{children}</ul>,
-          ol: ({ children }) => <ol style={{ margin: "0 0 8px 18px", padding: 0 }}>{children}</ol>,
-          li: ({ children }) => <li style={{ marginBottom: 4 }}>{children}</li>,
+          p: ({ children }) => <p className="md-p">{children}</p>,
+          ul: ({ children }) => <ul className="md-list">{children}</ul>,
+          ol: ({ children }) => <ol className="md-list md-ol">{children}</ol>,
+          li: ({ children }) => <li className="md-li">{children}</li>,
+          strong: ({ children }) => <strong className="md-strong">{children}</strong>,
+          h1: ({ children }) => <h3 className="md-h">{children}</h3>,
+          h2: ({ children }) => <h3 className="md-h">{children}</h3>,
+          h3: ({ children }) => <h3 className="md-h md-h3">{children}</h3>,
+          hr: () => <hr className="md-hr" />,
           code: ({ children, className }) => {
             const isBlock = Boolean(className);
             return (
-              <code
-                className={className}
-                style={
-                  isBlock
-                    ? {
-                        display: "block",
-                        background: "#f6f8fa",
-                        borderRadius: 8,
-                        padding: "10px 12px",
-                        overflowX: "auto",
-                        fontSize: 13,
-                      }
-                    : {
-                        background: "rgba(0,0,0,0.06)",
-                        borderRadius: 4,
-                        padding: "0 4px",
-                        fontSize: "0.9em",
-                      }
-                }
-              >
+              <code className={isBlock ? `md-code-block ${className ?? ""}` : "md-code"}>
                 {children}
               </code>
             );
           },
-          pre: ({ children }) => <pre style={{ margin: "0 0 8px" }}>{children}</pre>,
+          pre: ({ children }) => <pre className="md-pre">{children}</pre>,
           blockquote: ({ children }) => (
-            <blockquote
-              style={{
-                margin: "0 0 8px",
-                padding: "0 0 0 12px",
-                borderLeft: "3px solid #d9d9d9",
-                color: "#555",
-              }}
-            >
-              {children}
-            </blockquote>
+            <blockquote className="md-quote">{children}</blockquote>
           ),
         }}
       >
@@ -62,4 +39,3 @@ export function MarkdownText({ content }: MarkdownTextProps) {
     </div>
   );
 }
-

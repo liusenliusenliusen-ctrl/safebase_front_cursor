@@ -10,39 +10,14 @@ interface MessageBubbleProps {
 export function MessageBubble({ message, showDate }: MessageBubbleProps) {
   const isUser = message.role === "user";
   return (
-    <div
-      style={{
-        display: "flex",
-        justifyContent: isUser ? "flex-end" : "flex-start",
-        marginBottom: 12,
-        flexDirection: "column",
-        alignItems: isUser ? "flex-end" : "flex-start",
-      }}
-    >
+    <div className={`msg-row ${isUser ? "is-user" : "is-assistant"}`}>
       {showDate && (
-        <div
-          style={{
-            fontSize: 12,
-            color: "#999",
-            marginBottom: 8,
-          }}
-        >
-          {dayjs(message.created_at).format("YYYY年MM月DD日")}
-        </div>
+        <div className="date-chip">{dayjs(message.created_at).format("YYYY年M月D日")}</div>
       )}
-      <div
-        style={{
-          maxWidth: "80%",
-          padding: "12px 16px",
-          borderRadius: 16,
-          background: isUser ? "var(--user-bubble)" : "#fff",
-          boxShadow: isUser ? "none" : "var(--shadow-soft)",
-          whiteSpace: isUser ? "pre-wrap" : "normal",
-          wordBreak: "break-word",
-        }}
-      >
+      <div className={`msg-bubble ${isUser ? "is-user" : "is-assistant"}`}>
         {isUser ? message.content : <MarkdownText content={message.content} />}
       </div>
+      <div className="msg-meta">{dayjs(message.created_at).format("HH:mm")}</div>
     </div>
   );
 }

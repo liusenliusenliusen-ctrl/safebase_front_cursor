@@ -1,7 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Button,
-  Card,
   Drawer,
   Empty,
   Form,
@@ -9,11 +8,9 @@ import {
   Modal,
   Pagination,
   Space,
-  Typography,
   message,
 } from "antd";
 import {
-  BookOutlined,
   DeleteOutlined,
   EditOutlined,
   PlusOutlined,
@@ -30,7 +27,6 @@ import {
 } from "@/lib/diaryDb";
 import type { DiaryEntry } from "@/types";
 
-const { Text, Paragraph } = Typography;
 const PAGE_SIZE = 10;
 
 function excerpt(text: string, max = 140) {
@@ -51,6 +47,10 @@ export function DiaryPage() {
   const [editing, setEditing] = useState<DiaryEntry | null>(null);
   const [saving, setSaving] = useState(false);
   const [form] = Form.useForm<{ title: string; content: string }>();
+  const contentWatch = Form.useWatch("content", form) ?? "";
+  const titleWatch = Form.useWatch("title", form) ?? "";
+
+  const charCount = useMemo(() => String(contentWatch).trim().length, [contentWatch]);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -127,7 +127,21 @@ export function DiaryPage() {
     }
   };
 
-  const handleDelete = (row: DiaryEntry) => {
+  useEffect(() => {
+    if (!drawerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void handleSave();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- bind while drawer open
+  }, [drawerOpen, editing, saving]);
+
+  const handleDelete = (row: DiaryEntry, e?: React.MouseEvent) => {
+    e?.stopPropagation();
     Modal.confirm({
       title: "删除这篇日记？",
       content: "删除后无法恢复。",
@@ -155,36 +169,18 @@ export function DiaryPage() {
     setPage(1);
   };
 
+  const drawerWidth =
+    typeof window !== "undefined" ? Math.min(640, window.innerWidth - 16) : 640;
+
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "linear-gradient(165deg, #faf7f2 0%, #ebe6df 42%, #d4e3e1 100%)",
-        overflow: "auto",
-      }}
-    >
-      <div style={{ maxWidth: 880, margin: "0 auto", padding: "20px 20px 28px", width: "100%" }}>
-        <div
-          style={{
-            marginBottom: 22,
-            display: "flex",
-            flexWrap: "wrap",
-            alignItems: "flex-end",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
+    <div className="diary-stage">
+      <div className="content-column">
+        <div className="diary-toolbar">
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
-              <BookOutlined style={{ fontSize: 26, color: "#6a8e8f" }} />
-              <Text style={{ fontSize: 22, fontWeight: 600, color: "#2c3e3e" }}>我的日记</Text>
-            </div>
-            <Text type="secondary" style={{ fontSize: 14 }}>
-              明文存储，由数据库 RLS 限制仅本人可读写；访问会记入审计表。
-            </Text>
+            <h1 className="diary-title">日记</h1>
+            <p className="diary-sub">
+              留给自己的安静角落。写下的内容会帮助伴侣更懂你——对话与日记仍是分开的两个空间。
+            </p>
           </div>
           <Button type="primary" icon={<PlusOutlined />} size="large" onClick={openCreate}>
             写日记
@@ -193,7 +189,7 @@ export function DiaryPage() {
 
         <Input.Search
           size="large"
-          placeholder="搜索标题或正文（当前页/批量拉取后本地过滤）…"
+          placeholder="搜索标题或正文…"
           allowClear
           enterButton={
             <Button type="primary" icon={<SearchOutlined />}>
@@ -203,70 +199,67 @@ export function DiaryPage() {
           value={searchInput}
           onChange={(e) => setSearchInput(e.target.value)}
           onSearch={onSearch}
-          style={{ marginBottom: 20, maxWidth: 480 }}
+          style={{ marginBottom: 20, maxWidth: 440 }}
         />
 
         {loading ? (
-          <div style={{ padding: 48, textAlign: "center", color: "#888" }}>加载中…</div>
+          <div style={{ padding: 48, textAlign: "center", color: "var(--ink-muted)" }}>
+            加载中…
+          </div>
         ) : items.length === 0 ? (
-          <Card
-            style={{
-              borderRadius: 16,
-              border: "none",
-              boxShadow: "0 8px 32px rgba(0,0,0,0.06)",
-              background: "rgba(255,255,255,0.75)",
-            }}
-          >
+          <div className="empty-stage diary-empty-card">
             <Empty
               image={Empty.PRESENTED_IMAGE_SIMPLE}
               description={
-                <span style={{ color: "#888" }}>
-                  {q.trim() ? "没有匹配的日记，换个关键词试试" : "还没有日记，点右上角「写日记」开始吧"}
-                </span>
+                q.trim() ? "没有匹配的日记，换个关键词试试" : "还没有日记"
               }
             />
-          </Card>
+            {!q.trim() && (
+              <>
+                <p className="diary-empty-lead">
+                  把今天的一点感受留下来，哪怕只有几行。写在这里的内容，会温柔地帮助伴侣理解你。
+                </p>
+                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
+                  写第一篇
+                </Button>
+              </>
+            )}
+          </div>
         ) : (
-          <Space direction="vertical" size={14} style={{ width: "100%" }}>
+          <Space direction="vertical" size={12} style={{ width: "100%" }}>
             {items.map((row) => (
-              <Card
+              <article
                 key={row.id}
-                hoverable
-                style={{
-                  borderRadius: 16,
-                  border: "1px solid rgba(0,0,0,0.04)",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.05)",
-                  background: "rgba(255,255,255,0.88)",
+                className="diary-item"
+                role="button"
+                tabIndex={0}
+                onClick={() => openEdit(row)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    openEdit(row);
+                  }
                 }}
-                styles={{ body: { padding: "16px 18px" } }}
               >
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <Text strong style={{ fontSize: 16, color: "#2c3e3e" }}>
-                      {row.title?.trim() || "无标题"}
-                    </Text>
-                    <div style={{ marginTop: 6 }}>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {dayjs(row.updated_at).format("YYYY-MM-DD HH:mm")} 更新
-                      </Text>
-                    </div>
-                    <Paragraph
-                      ellipsis={{ rows: 3 }}
-                      style={{ marginTop: 10, marginBottom: 0, color: "#555", fontSize: 14 }}
-                    >
-                      {excerpt(row.content)}
-                    </Paragraph>
-                  </div>
-                  <Space>
-                    <Button icon={<EditOutlined />} onClick={() => openEdit(row)}>
-                      编辑
-                    </Button>
-                    <Button danger icon={<DeleteOutlined />} onClick={() => handleDelete(row)}>
-                      删除
-                    </Button>
-                  </Space>
+                <h2 className="diary-item-title">{row.title?.trim() || "无标题"}</h2>
+                <div className="diary-item-meta">
+                  {dayjs(row.updated_at).format("YYYY年M月D日 HH:mm")} 更新
                 </div>
-              </Card>
+                <p className="diary-item-excerpt">{excerpt(row.content)}</p>
+                <div className="diary-item-actions" onClick={(e) => e.stopPropagation()}>
+                  <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(row)}>
+                    编辑
+                  </Button>
+                  <Button
+                    size="small"
+                    danger
+                    icon={<DeleteOutlined />}
+                    onClick={(e) => handleDelete(row, e)}
+                  >
+                    删除
+                  </Button>
+                </div>
+              </article>
             ))}
           </Space>
         )}
@@ -286,26 +279,47 @@ export function DiaryPage() {
 
       <Drawer
         title={editing ? "编辑日记" : "写日记"}
-        width={Math.min(520, typeof window !== "undefined" ? window.innerWidth - 24 : 520)}
+        width={drawerWidth}
         open={drawerOpen}
         onClose={() => {
           setDrawerOpen(false);
           setEditing(null);
         }}
         destroyOnClose
-        styles={{ body: { paddingBottom: 80 } }}
+        className="diary-drawer"
+        styles={{
+          body: { paddingTop: 8, paddingBottom: 28, background: "var(--paper)" },
+          header: {
+            borderBottom: "1px solid var(--line)",
+            background: "var(--paper)",
+          },
+        }}
         extra={
           <Space>
-            <Button onClick={() => setDrawerOpen(false)}>取消</Button>
+            <Button
+              onClick={() => {
+                setDrawerOpen(false);
+                setEditing(null);
+              }}
+            >
+              取消
+            </Button>
             <Button type="primary" loading={saving} onClick={() => void handleSave()}>
               保存
             </Button>
           </Space>
         }
       >
-        <Form form={form} layout="vertical" requiredMark={false}>
+        <Form form={form} layout="vertical" requiredMark={false} className="diary-form">
           <Form.Item label="标题（可选）" name="title">
-            <Input placeholder="一句话标题" maxLength={256} showCount />
+            <Input
+              className="diary-title-input"
+              placeholder="一句话标题，也可以留空"
+              maxLength={256}
+              showCount
+              size="large"
+              variant="borderless"
+            />
           </Form.Item>
           <Form.Item
             label="正文"
@@ -313,12 +327,20 @@ export function DiaryPage() {
             rules={[{ required: true, message: "请填写正文" }]}
           >
             <Input.TextArea
-              placeholder="写下今天想说的…"
-              autoSize={{ minRows: 14, maxRows: 28 }}
-              style={{ fontSize: 15, lineHeight: 1.75 }}
+              className="diary-body-input"
+              placeholder="写下今天想说的…不必完美。"
+              autoSize={{ minRows: 18, maxRows: 36 }}
+              variant="borderless"
+              autoFocus
             />
           </Form.Item>
         </Form>
+        <div className="diary-editor-meta">
+          <span>
+            {titleWatch.trim() ? "有标题" : "无标题"} · {charCount} 字
+          </span>
+          <span>⌘/Ctrl + S 保存</span>
+        </div>
       </Drawer>
     </div>
   );

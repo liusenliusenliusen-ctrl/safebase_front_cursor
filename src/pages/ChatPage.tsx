@@ -1,9 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { message } from "antd";
 import { useAuthStore } from "@/stores/authStore";
-import {
-  fetchMessagesPage,
-} from "@/lib/chatDb";
+import { fetchMessagesPage } from "@/lib/chatDb";
 import { useChatStore } from "@/stores/chatStore";
 import type { Message } from "@/types";
 import { MessageList } from "@/components/MessageList";
@@ -86,8 +84,7 @@ export function ChatPage() {
           byId.set(m.id, m);
         }
         return [...byId.values()].sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         );
       });
     });
@@ -114,8 +111,7 @@ export function ChatPage() {
       };
       setMessages((prev) =>
         [...prev, optimisticMsg].sort(
-          (a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
         )
       );
 
@@ -129,9 +125,7 @@ export function ChatPage() {
           prev
             .map((m) => (m.id === optimisticId ? userMsg : m))
             .sort(
-              (a, b) =>
-                new Date(a.created_at).getTime() -
-                new Date(b.created_at).getTime()
+              (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
             )
         );
       } catch (e) {
@@ -146,9 +140,7 @@ export function ChatPage() {
     if (optimisticUserMsgId != null) {
       setMessages((prev) =>
         prev.filter(
-          (m) =>
-            m.id !== optimisticUserMsgId &&
-            !m.id.startsWith("optimistic-")
+          (m) => m.id !== optimisticUserMsgId && !m.id.startsWith("optimistic-")
         )
       );
     }
@@ -157,16 +149,16 @@ export function ChatPage() {
 
   if (!user) return null;
 
+  const handlePickStarter = useCallback(
+    (text: string) => {
+      if (sending || loading) return;
+      setDraft(text);
+    },
+    [sending, loading, setDraft]
+  );
+
   return (
-    <div
-      style={{
-        flex: 1,
-        minHeight: 0,
-        display: "flex",
-        flexDirection: "column",
-        background: "var(--bg-page)",
-      }}
-    >
+    <div className="chat-stage">
       <MessageList
         messages={messages}
         loading={loading}
@@ -175,6 +167,7 @@ export function ChatPage() {
         onLoadMore={loadMore}
         streamingContent={streamingContent}
         waitingForAssistant={waitingForAssistant}
+        onPickStarter={handlePickStarter}
       />
       <ChatInput
         value={draft}

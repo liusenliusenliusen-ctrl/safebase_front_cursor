@@ -8,8 +8,9 @@
 | [safebase_backend_cursor](../safebase_backend_cursor) | API、RAG 对话、Schema、夜间批处理 |
 | [safebase_admin_cursor](../safebase_admin_cursor) | 管理后台（:5174） |
 
+**产品文档：** [需求设计](./docs/需求设计文档.md) · [功能说明](./docs/项目功能文档.md) · [实现说明](./docs/项目实现文档.md) · [部署文档](./docs/部署文档.md)  
 **开发指南：** [docs/DEVELOPMENT.md](./docs/DEVELOPMENT.md)  
-**生产部署：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)（含 `scripts/deploy-upload.sh` 一键部署）  
+**生产部署（英文/旧版）：** [docs/DEPLOYMENT.md](./docs/DEPLOYMENT.md)（含 `scripts/deploy-upload.sh` 一键部署）  
 **安全演进：** [docs/SECURITY_EVOLUTION.md](./docs/SECURITY_EVOLUTION.md)（DB 访问控制与隐私分阶段计划）
 
 ## 本地开发

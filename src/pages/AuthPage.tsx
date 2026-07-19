@@ -54,47 +54,14 @@ export function AuthPage() {
   };
 
   return (
-    <div
-      style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: 24,
-        background: "var(--bg-page)",
-      }}
-    >
-      <div
-        style={{
-          width: "100%",
-          maxWidth: 400,
-          background: "#fff",
-          borderRadius: 16,
-          padding: 32,
-          boxShadow: "var(--shadow-soft)",
-        }}
-      >
-        <h1
-          style={{
-            textAlign: "center",
-            marginBottom: 8,
-            fontSize: 22,
-            fontWeight: 600,
-            color: "#333",
-          }}
-        >
-          创伤疗愈伴侣
-        </h1>
-        <p
-          style={{
-            textAlign: "center",
-            color: "#666",
-            marginBottom: 24,
-            fontSize: 14,
-          }}
-        >
-          在这里，你被看见、被接纳
-        </p>
+    <div className="auth-stage">
+      <div className="auth-panel">
+        <div className="auth-brand">
+          <div className="eyebrow">SAFEBASE</div>
+          <h1>创伤疗愈伴侣</h1>
+          <p>在这里，你被看见、被接纳</p>
+          <p className="auth-boundary">陪伴与反思，不是诊疗</p>
+        </div>
         <Tabs
           activeKey={activeTab}
           onChange={(k) => {
@@ -128,7 +95,12 @@ export function AuthPage() {
               name="password"
               control={control}
               render={({ field }) => (
-                <Input.Password placeholder="登录密码" size="large" autoComplete="current-password" {...field} />
+                <Input.Password
+                  placeholder="登录密码"
+                  size="large"
+                  autoComplete="current-password"
+                  {...field}
+                />
               )}
             />
           </Form.Item>
@@ -139,7 +111,7 @@ export function AuthPage() {
               size="large"
               block
               loading={isSubmitting}
-              style={{ borderRadius: 12, height: 44 }}
+              style={{ borderRadius: 14, height: 46 }}
             >
               {activeTab === "login" ? "登录" : "注册"}
             </Button>

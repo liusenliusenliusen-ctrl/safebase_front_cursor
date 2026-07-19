@@ -1,5 +1,5 @@
-import { useState, useCallback } from "react";
-import { Input, Button } from "antd";
+import { useState, useCallback, useRef, useEffect } from "react";
+import { Input, Button, Tooltip } from "antd";
 import { SendOutlined, StopOutlined } from "@ant-design/icons";
 
 const { TextArea } = Input;
@@ -26,6 +26,35 @@ export function ChatInput({
   const controlled = valueProp !== undefined && onChangeProp !== undefined;
   const value = controlled ? valueProp! : internalValue;
   const setValue = controlled ? onChangeProp! : setInternalValue;
+  const areaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  useEffect(() => {
+    if (!sending) {
+      areaRef.current?.focus();
+    }
+  }, [sending]);
+
+  useEffect(() => {
+    if (controlled && valueProp && !sending) {
+      areaRef.current?.focus();
+      const el = areaRef.current;
+      if (el) {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    }
+  }, [controlled, valueProp, sending]);
+
+  useEffect(() => {
+    if (value && !sending) {
+      areaRef.current?.focus();
+      const el = areaRef.current;
+      if (el) {
+        const len = el.value.length;
+        el.setSelectionRange(len, len);
+      }
+    }
+  }, [value, sending]);
 
   const send = useCallback(() => {
     const text = value.trim();
@@ -52,53 +81,53 @@ export function ChatInput({
   };
 
   return (
-    <div
-      style={{
-        padding: "12px 20px 20px",
-        background: "var(--bg-page)",
-        borderTop: "1px solid rgba(0,0,0,0.06)",
-        display: "flex",
-        alignItems: "flex-end",
-        gap: 12,
-      }}
-    >
-      <TextArea
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        onPaste={handlePaste}
-        placeholder="在这里写下你想说的…"
-        autoSize={{ minRows: 1, maxRows: 5 }}
-        disabled={disabled}
-        style={{
-          flex: 1,
-          borderRadius: 12,
-          maxHeight: 120,
-          resize: "none",
-        }}
-        rows={1}
-      />
-      {sending && onStop ? (
-        <Button
-          type="default"
-          icon={<StopOutlined />}
-          onClick={onStop}
-          style={{ borderRadius: 12, height: 40 }}
-        >
-          停止
-        </Button>
-      ) : (
-        <Button
-          type="primary"
-          icon={<SendOutlined />}
-          onClick={send}
-          disabled={!value.trim() || disabled}
-          loading={sending}
-          style={{ borderRadius: 12, height: 40 }}
-        >
-          发送
-        </Button>
-      )}
+    <div className="composer-dock">
+      <div className="content-column">
+        <div className="composer-shell">
+          <TextArea
+            ref={areaRef}
+            className="composer-textarea"
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            placeholder="跟我说些什么…"
+            autoSize={{ minRows: 2, maxRows: 10 }}
+            disabled={disabled || sending}
+            style={{ flex: 1, maxHeight: 260 }}
+            rows={2}
+          />
+          {sending && onStop ? (
+            <Tooltip title="停止生成">
+              <Button
+                type="default"
+                className="composer-action"
+                icon={<StopOutlined />}
+                onClick={onStop}
+              >
+                停止
+              </Button>
+            </Tooltip>
+          ) : (
+            <Tooltip title="Enter 发送 · Shift+Enter 换行">
+              <Button
+                type="primary"
+                className="composer-action"
+                icon={<SendOutlined />}
+                onClick={send}
+                disabled={!value.trim() || disabled}
+                loading={sending}
+              >
+                发送
+              </Button>
+            </Tooltip>
+          )}
+        </div>
+        <div className="composer-hint">
+          <span>Enter 发送 · Shift+Enter 换行</span>
+          <span>{value.trim() ? `${value.trim().length} 字` : "慢慢写就好"}</span>
+        </div>
+      </div>
     </div>
   );
 }

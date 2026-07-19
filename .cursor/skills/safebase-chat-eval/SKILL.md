@@ -15,6 +15,8 @@ description: >-
 | 用途 | 路径 |
 |------|------|
 | 疗愈伙伴 system prompt | `safebase_backend_cursor/src/chat/prompt.ts` |
+| **Prompt 调试日志（必读/必记）** | `safebase_backend_cursor/docs/疗愈伴侣Prompt调试日志.md` |
+| 模型选型史 | `safebase_backend_cursor/docs/疗愈伴侣模型调试报告.md` |
 | RAG + 流式 | `safebase_backend_cursor/src/chat/memory.ts`, `routes.ts` |
 | 前端停止/流式 | `safebase_front_cursor/src/api/chatStream.ts`, `stores/chatStore.ts` |
 | 模拟用户脚本 | `safebase_front_cursor/scripts/seed-trauma-users.mjs` |
@@ -47,10 +49,14 @@ node scripts/export-dialogues.mjs             # 导出到 docs/SIMULATED_USER_DI
 
 ## 疗愈伙伴 prompt 要点（`prompt.ts`）
 
-- 只输出口语中文，**禁止**括号动作、Markdown 标题、编号列表体。
-- 结构：具体反映 → 整合串联 → 温和假设 → 贴地收尾。
-- 篇幅：长自述 400–800 字；日常 150–350；急性 distress 120–250。
-- 引用 RAG 块（画像/摘要/锚点/日记）中至少一处真实细节，不捏造。
+改 prompt 前先读 **`docs/疗愈伴侣Prompt调试日志.md`** 的经验法则与最近记录；改完必须追加一条（改动点 / 原因 / 助手看法 / 用户看法）。
+
+当前方向（2026-07 基线）：
+
+- 通道：DeepSeek 官方 · deep=`deepseek-reasoner` / fast=`deepseek-chat`
+- system：简洁身份与目标 +「把脉络与深层含义说透；篇幅随复杂度展开」；**不要**恢复编号 SOP / user 侧 intake 任务块
+- user：仅画像 / 近期对话 / 摘要 / 锚点 + 当前输入
+- 主观标准：深入准确、情绪温暖、接近 DeepSeek 网页；字数只是辅助
 
 改 prompt 后：**重启 backend**（本地 `npm run dev`；生产 `pm2 restart safebase-backend --update-env`）。
 
